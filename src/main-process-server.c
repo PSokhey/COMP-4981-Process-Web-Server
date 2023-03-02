@@ -28,53 +28,59 @@ typedef ssize_t (*read_message_func)(const struct dc_env *env, struct dc_error *
 typedef size_t (*process_message_func)(const struct dc_env *env, struct dc_error *err, const uint8_t *raw_data, uint8_t **processed_data, ssize_t count);
 typedef void (*send_message_func)(const struct dc_env *env, struct dc_error *err, uint8_t *buffer, size_t count, int client_socket, bool *closed);
 
-
+// Settings information passed to the server.
 struct settings
 {
-    char *library_path;
-    char *interface;
-    char *address;
-    uint16_t port;
-    uint16_t backlog;
-    uint8_t jobs;
-    bool verbose_server;
-    bool verbose_handler;
-    bool debug_server;
-    bool debug_handler;
+    char *library_path; // Path to the library containing the message handler.
+    char *interface; // Interface to bind to.
+    char *address; // Address to bind to.
+    uint16_t port; // Port to bind to.
+    uint16_t backlog; // Number of connections to queue.
+    uint8_t jobs; // Number of worker processes to spawn.
+    bool verbose_server; // Whether to print verbose server information.
+    bool verbose_handler; // Whether to print verbose handler information.
+    bool debug_server; // Whether to print debug server information.
+    bool debug_handler; // Whether to print debug handler information.
 };
 
+// Information about the server.
+// The Parent process accepts connections on domain socket and passes them to the worker processes.
 struct server_info
 {
-    sem_t *domain_sem;
-    int domain_socket;
-    int pipe_fd;
-    int num_workers;
-    pid_t *workers;
-    int listening_socket;
-    int num_fds;
-    struct pollfd *poll_fds;
+    sem_t *domain_sem; // Semaphore used to synchronize access to the domain socket.
+    int domain_socket; // Domain socket used to communicate with the worker to pass client sockets.
+    int pipe_fd; // Pipe used to communicate with the worker processes to send commands.
+    int num_workers; // Number of worker processes.
+    pid_t *workers; // Array of worker process ids.
+    int listening_socket; // Socket used to accept connections.
+    int num_fds; // Number of file descriptors in the poll_fds array.
+    struct pollfd *poll_fds; // Array of file descriptors to poll.
 };
 
+// for handling incoming messages
 struct message_handler
 {
-    read_message_func reader;
-    process_message_func processor;
-    send_message_func sender;
+    read_message_func reader; // Function used to read a message from a socket.
+    process_message_func processor; // Function used to process a message.
+    send_message_func sender; // Function used to send a message to a socket.
 };
 
+
+// Information about a worker process.
 struct worker_info
 {
-    sem_t *select_sem;
-    sem_t *domain_sem;
-    int domain_socket;
-    int pipe_fd;
+    sem_t *select_sem; // Semaphore used to synchronize access to the select call.
+    sem_t *domain_sem; // Semaphore used to synchronize access to the domain socket.
+    int domain_socket; // Domain socket used to communicate with the parent to pass client sockets.
+    int pipe_fd; // Pipe used to communicate with the parent process to receive commands.
     struct message_handler message_handler;
 };
 
+// Information about a client connection.
 struct revive_message
 {
-    int fd;
-    bool closed;
+    int fd; // File descriptor of the client socket.
+    bool closed; // Whether the client socket has been closed.
 };
 
 
