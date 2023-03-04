@@ -111,16 +111,16 @@ static void send_revive(const struct dc_env *env, struct dc_error *err, struct w
 static void print_fd(const struct dc_env *env, const char *message, int fd, bool display);
 static void print_socket(const struct dc_env *env, struct dc_error *err, const char *message, int socket, bool display);
 
-
-static const int DEFAULT_N_PROCESSES = 2;
-static const int DEFAULT_PORT = 4981;
-static const int DEFAULT_BACKLOG = SOMAXCONN;
-static const char * const READ_MESSAGE_FUNC = "read_message_handler";
-static const char * const PROCESS_MESSAGE_FUNC = "process_message_handler";
-static const char * const SEND_MESSAGE_FUNC = "send_message_handler";
+// Default settings.
+static const int DEFAULT_N_PROCESSES = 2; // Default number of worker processes.
+static const int DEFAULT_PORT = 4981; // Default port to listen on.
+static const int DEFAULT_BACKLOG = SOMAXCONN; // Default backlog for the listening socket.
+static const char * const READ_MESSAGE_FUNC = "read_message_handler"; // Default function used to read a message from a socket.
+static const char * const PROCESS_MESSAGE_FUNC = "process_message_handler"; // Default function used to process a message.
+static const char * const SEND_MESSAGE_FUNC = "send_message_handler"; // Default function used to send a message to a socket.
 static volatile sig_atomic_t done = 0;     // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
-
+// To Drive the program.
 int main(int argc, char *argv[])
 {
     struct dc_error *err;
@@ -130,14 +130,22 @@ int main(int argc, char *argv[])
     struct settings settings;
     const char *error_message;
 
-    err = dc_error_create(false);
-    env = dc_env_create(err, true, NULL);
-    default_settings = dc_malloc(env, err, sizeof(*default_settings));
-    setup_default_settings(env, err, default_settings);
-    dc_memset(env, &settings, 0, sizeof(settings));
-    copy_settings(env, err, &settings, default_settings);
-    should_exit = parse_args(env, err, argc, argv, &settings);
+    // Initialization of error and environment handling.
+    err = dc_error_create(false); // initialize error handling.
+    env = dc_env_create(err, true, NULL); // initialize environment.
 
+    // Initialize default settings.
+    default_settings = dc_malloc(env, err, sizeof(*default_settings)); // allocate memory for default settings.
+    setup_default_settings(env, err, default_settings); // set default settings.
+
+    // Initialize settings to run server.
+    // Copy default settings to settings.
+    // Parse user settings.
+    dc_memset(env, &settings, 0, sizeof(settings)); // initialize settings to 0.
+    copy_settings(env, err, &settings, default_settings); // copy default settings to settings.
+    should_exit = parse_args(env, err, argc, argv, &settings); // parse command line arguments, flag for if valid commands.
+
+    // Check if settings are valid and if error message, set flag to exit as true if an error.
     if(!(should_exit))
     {
         error_message = check_settings(env, &settings);
@@ -147,79 +155,111 @@ int main(int argc, char *argv[])
             should_exit = true;
         }
     }
+
+    // else continue with no error message.
     else
     {
         error_message = NULL;
     }
 
+    // checks if flagged for exit due to error or help parsed, print help and clean resources.
     if(should_exit)
     {
-        usage(env, argv[0], default_settings, error_message);
-        destroy_settings(env, default_settings);
-        dc_free(env, default_settings);
+        usage(env, argv[0], default_settings, error_message); // print optional commands.
+        destroy_settings(env, default_settings); // destroy settings.
+        dc_free(env, default_settings); // free memory for default settings.
     }
+
+    // else, run the server with settings now set.
     else
     {
-        sem_t *select_sem;
-        sem_t *domain_sem;
-        int domain_sockets[2];
-        int pipe_fds[2];
-        pid_t *workers;
-        bool is_server;
+        sem_t *select_sem;  // select semaphore for interprocess comminication.*
+        sem_t *domain_sem; // domain socket semaphore for server-worker communication.*
+        int domain_sockets[2]; // domain socket for reading and writing.*
+        int pipe_fds[2]; // pipe for reading and writing.*
+        pid_t *workers; // array of worker processes.
+        bool is_server; // flag for if server, else worker.
         pid_t pid;
         char domain_sem_name[100];  // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
         char select_sem_name[100];  // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
+        // if to print debug messages.
         if(settings.debug_server)
         {
             dc_env_set_tracer(env, dc_env_default_tracer);
         }
 
+        // destroy default settings because already copied to current settings.
         destroy_settings(env, default_settings);
         dc_free(env, default_settings);
 
-        socketpair(AF_UNIX, SOCK_DGRAM, 0, domain_sockets);
-        dc_pipe(env, err, pipe_fds);
+        // Set the interprocess communication.
+        socketpair(AF_UNIX, SOCK_DGRAM, 0, domain_sockets); // set domain socket.
+        dc_pipe(env, err, pipe_fds); // set pipe.
+
+        // Print server settings and main server process id.
         printf("Starting server (%d) on %s:%d\n", getpid(), settings.address, settings.port);
         print_settings(env, &settings);
-        workers = NULL;
-        pid = getpid();
+
+        // Set up the semaphores to synchronize the server and workers.
+        workers = NULL; // worker array set to null.
+        pid = getpid(); // get main server process id.
+        // creates a name for the domain semaphore.
         sprintf(domain_sem_name, "/sem-%d-domain", pid);    // NOLINT(cert-err33-c)
+        // creates a name for the select semaphore.
         sprintf(select_sem_name, "/sem-%d-select", pid);    // NOLINT(cert-err33-c)
+        // open the select semaphore.
         select_sem = sem_open(select_sem_name, O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH, 1);
+        // open the domain semaphore.
         domain_sem = sem_open(domain_sem_name, O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH, 1);
+        // allocates memory for the worker array.
         workers = (pid_t *)dc_malloc(env, err, settings.jobs * sizeof(pid_t));
+        // create the workers with the settings, worker array, semaphores, domain sockets, and pipe.
         is_server = create_workers(env, err, &settings, workers, select_sem, domain_sem, domain_sockets, pipe_fds);
 
+        // To be only done by the server.
         if(is_server)
         {
-            struct sigaction act;
-            struct server_info server;
+            struct sigaction act; // signal action for signal interrupt.
+            struct server_info server; // server information.
 
+            // Set up the signal handler.
             act.sa_handler = sigint_handler;
             dc_sigemptyset(env, err, &act.sa_mask);
             act.sa_flags = 0;
             dc_sigaction(env, err, SIGINT, &act, NULL);
-            dc_close(env, err, domain_sockets[0]);
-            dc_close(env, err, pipe_fds[1]);
+
+            // Adjust IPC for the server (not workers).
+            dc_close(env, err, domain_sockets[0]); // close the domain socket for reading, can only write.
+            dc_close(env, err, pipe_fds[1]); // close the pipe for writing, can only read.
+
+            // Initialize and from here run the server.
+            // Allocate memory for the server information and zero it out.
             dc_memset(env, &server, 0, sizeof(server));
+            // Initialize the server with the settings, semaphores, domain sockets (write), and pipe (read).
             initialize_server(env, err, &server, &settings, domain_sem, domain_sockets[1], pipe_fds[0], workers);
+            // Run and loop server till it is time to exit.
             run_server(env, err, &server, &settings);
-            destroy_server(env, err, &server);
+
+            // From here the server has stopped running and is about to exit.
+            destroy_server(env, err, &server); // clean semaphore and socket resources.
         }
 
-        sem_close(domain_sem);
-        sem_close(select_sem);
+        // Close and unlink the semaphores.
+        sem_close(domain_sem); // close the domain semaphore.
+        sem_close(select_sem); // close the select semaphore.
 
+        // To be only done by the server.
         if(is_server)
         {
-            sem_unlink(domain_sem_name);
-            sem_unlink(select_sem_name);
+            sem_unlink(domain_sem_name); // removed named domain semaphore.
+            sem_unlink(select_sem_name); // removed named select semaphore.
         }
     }
 
+    // Clean up all remaining resources before exiting.
     destroy_settings(env, &settings);
-    printf("Exiting %d\n", getpid());
+    printf("Exiting %d\n", getpid()); // print exiting process id, worker or server.
     free(env);
     dc_error_reset(err);
     free(err);
