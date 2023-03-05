@@ -267,6 +267,7 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 }
 
+// Set the default settings if not set by the user.
 static void setup_default_settings(const struct dc_env *env, struct dc_error *err, struct settings *default_settings)
 {
     DC_TRACE(env);
@@ -282,6 +283,7 @@ static void setup_default_settings(const struct dc_env *env, struct dc_error *er
     default_settings->debug_handler    = false;
 }
 
+// Copy the default settings to the current settings.
 static void copy_settings(const struct dc_env *env, struct dc_error *err, struct settings *settings, const struct settings *default_settings)
 {
     DC_TRACE(env);
@@ -296,6 +298,7 @@ static void copy_settings(const struct dc_env *env, struct dc_error *err, struct
     settings->debug_handler    = default_settings->debug_handler;
 }
 
+// Display the current settings state.
 static void print_settings(const struct dc_env *env, const struct settings *settings)
 {
     DC_TRACE(env);
@@ -313,6 +316,7 @@ static void print_settings(const struct dc_env *env, const struct settings *sett
     // NOLINTEND(cert-err33-c)
 }
 
+// Clean up of the setting resources taking memory.
 static void destroy_settings(const struct dc_env *env, struct settings *settings)
 {
     DC_TRACE(env);
@@ -333,6 +337,7 @@ static void destroy_settings(const struct dc_env *env, struct settings *settings
     }
 }
 
+// Parse the command line arguments and set the settings.
 static bool parse_args(const struct dc_env *env, struct dc_error *err, int argc, char **argv, struct settings *settings)
 {
     static const int base = 10;
@@ -362,6 +367,7 @@ static bool parse_args(const struct dc_env *env, struct dc_error *err, int argc,
     option_index = 0;
     should_exit = false;
 
+    // While there are options to parse, set the settings.
     while((opt = dc_getopt_long(env, argc, argv, "l:i:a:p:b:j:vVdDh", long_options, &option_index)) != -1)
     {
         switch (opt)
@@ -406,6 +412,7 @@ static bool parse_args(const struct dc_env *env, struct dc_error *err, int argc,
     return should_exit;
 }
 
+// Check the settings for errors, and return a message if there is an error.
 static const char *check_settings(const struct dc_env *env, const struct settings *settings)
 {
     const char *message;
@@ -424,6 +431,7 @@ static const char *check_settings(const struct dc_env *env, const struct setting
     return message;
 }
 
+// Print the usage of the program to the user if error or requested help.
 static void usage(const struct dc_env *env, const char *program_name, const struct settings *default_settings, const char *message)
 {
     DC_TRACE(env);
@@ -452,12 +460,14 @@ static void usage(const struct dc_env *env, const char *program_name, const stru
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+// Signal handler for SIGINT, this code should remain unchanged.
 static void sigint_handler(int signal)
 {
     done = true;
 }
 #pragma GCC diagnostic pop
 
+// Linking passed in library to function pointers, this code should remain unchanged.
 static void setup_message_handler(const struct dc_env *env, struct dc_error *err, struct message_handler *message_handler, void *library)
 {
     read_message_func    read_func;
@@ -493,65 +503,91 @@ static void setup_message_handler(const struct dc_env *env, struct dc_error *err
     }
 }
 
+// Create the worker processes, return is only true for server and false for worker processes.
 static bool create_workers(struct dc_env *env, struct dc_error *err, const struct settings *settings, pid_t *workers, sem_t *select_sem, sem_t *domain_sem, const int domain_sockets[2], const int pipe_fds[2])
 {
     DC_TRACE(env);
 
+    // Loop for as many worker child processes needed to be created.
     for(int i = 0; i < settings->jobs; i++)
     {
-        pid_t pid;
+        pid_t pid; // Process ID to differentiate between server and worker processes.
 
+        // Fork the process to create a child process.
         pid = dc_fork(env, err);
 
+        // To only apply to worker child processes.
+        // Setting of the worker process information.
         if(pid == 0)
         {
-            struct sigaction act;
-            struct worker_info worker;
-            void *library;
+            struct sigaction act; // Signal action for SIGINT.
+            struct worker_info worker; // Worker information.
+            void *library; // Library to be linked to.
 
+            // Set the signal handler for SIGINT.
             act.sa_handler = sigint_handler;
             dc_sigemptyset(env, err, &act.sa_mask);
             act.sa_flags = 0;
             dc_sigaction(env, err, SIGINT, &act, NULL);
             dc_free(env, workers);
-            dc_close(env, err, domain_sockets[1]);
-            dc_close(env, err, pipe_fds[0]);
+
+            // Adjust the IPC for the workers (not server)
+            dc_close(env, err, domain_sockets[1]); // Close write end of the domain socket, can only read.
+            dc_close(env, err, pipe_fds[0]); // Close read end of the pipe, can only write.
+
+            // Access the library parsed in.
             library = dc_dlopen(env, err, settings->library_path, RTLD_LAZY);
 
+            // If no errors, finish rest of worker process setup.
             if(dc_error_has_no_error(err))
             {
+                // Set up the message handler for the worker process.
+                // Allocate memory and zero out the message handler for the worker process.
                 dc_memset(env, &worker.message_handler, 0, sizeof(worker.message_handler));
+                // Link the library to the message handler.
                 setup_message_handler(env, err, &worker.message_handler, library);
 
-                worker.select_sem = select_sem;
-                worker.domain_sem = domain_sem;
-                worker.domain_socket = domain_sockets[0];
-                worker.pipe_fd = pipe_fds[1];
+                // Set the semaphore and IPC for worker process.
+                worker.select_sem = select_sem; // Select semaphore.
+                worker.domain_sem = domain_sem; // Domain semaphore.
+                worker.domain_socket = domain_sockets[0]; // domain socket, can only read.
+                worker.pipe_fd = pipe_fds[1]; // pipe, can only write.
+
+                // Run the worker process.
                 worker_process(env, err, &worker, settings);
+                // Close the library.
                 dc_dlclose(env, err, library);
             }
 
+            // Return false to indicate that this is a worker process.
             return false;
         }
 
+        // Add to the worker process array.
         workers[i] = pid;
     }
 
+    // Return true to indicate that this is the server process.
     return true;
 }
 
+// Initialize the server settings for IPC and network communication.
 static void initialize_server(const struct dc_env *env, struct dc_error *err, struct server_info *server,  const struct settings *settings, sem_t *domain_sem, int domain_socket, int pipe_fd, pid_t *workers)
 {
     static int optval = 1;
     struct sockaddr_in server_address;
 
     DC_TRACE(env);
+
+    // Server setup for IPC and listening socket.
     server->domain_sem = domain_sem;
     server->domain_socket = domain_socket;
     server->pipe_fd = pipe_fd;
     server->num_workers = settings->jobs;
     server->workers = workers;
-    server->listening_socket = socket(AF_INET, SOCK_STREAM, 0);
+    server->listening_socket = socket(AF_INET, SOCK_STREAM, 0); // Socket for incoming network connections.
+
+    // Network communication setup.
     dc_memset(env, &server_address, 0, sizeof(server_address));
     server_address.sin_family = AF_INET;
     server_address.sin_addr.s_addr = dc_inet_addr(env, err, settings->address);
@@ -559,14 +595,20 @@ static void initialize_server(const struct dc_env *env, struct dc_error *err, st
     dc_setsockopt(env, err, server->listening_socket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
     dc_bind(env, err, server->listening_socket, (struct sockaddr *)&server_address, sizeof(server_address));
     dc_listen(env, err, server->listening_socket, settings->backlog);
+
+    // Allocate memory for polling.
     server->poll_fds = (struct pollfd *)dc_malloc(env, err, sizeof(struct pollfd) * 2);
-    server->poll_fds[0].fd = server->listening_socket;
-    server->poll_fds[0].events = POLLIN;
-    server->poll_fds[1].fd = server->pipe_fd;
-    server->poll_fds[1].events = POLLIN;
+
+    // For changes in network socket for incoming connections, listening for input.
+    server->poll_fds[0].fd = server->listening_socket; // File descriptor for the listening socket.
+    server->poll_fds[0].events = POLLIN; // Poll for input, there is data to be read.
+    // For changes in pipe for worker processes, listening for input.
+    server->poll_fds[1].fd = server->pipe_fd; // File descriptor for the pipe.
+    server->poll_fds[1].events = POLLIN; // Poll for input, there is data to be read.
     server->num_fds = 2;
 }
 
+// Destroy all worker processes and poll file descriptors for the server.
 static void destroy_server(const struct dc_env *env, struct dc_error *err, struct server_info *server)
 {
     if(server->poll_fds)
@@ -583,9 +625,11 @@ static void destroy_server(const struct dc_env *env, struct dc_error *err, struc
     dc_close(env, err, server->pipe_fd);
 }
 
+// Main function to run the server once all setup is finished.
 static void run_server(const struct dc_env *env, struct dc_error *err, struct server_info *server, const struct settings *settings)
 {
     DC_TRACE(env);
+    // Run the server loop until done.
     server_loop(env, err, settings, server);
 
     /*
@@ -595,24 +639,30 @@ static void run_server(const struct dc_env *env, struct dc_error *err, struct se
     }
     */
 
+    // Wait for all worker processes to finish once server is done.
     wait_for_workers(env, err, server);
 }
 
+// Server loop to keep polling until error or SIGINT.
 static void server_loop(const struct dc_env *env, struct dc_error *err, const struct settings *settings, struct server_info *server)
 {
     DC_TRACE(env);
 
+    // run endlessly until error or SIGINT.
     while(!done)
     {
         int poll_result;
 
+        // Poll for changes in the file descriptors, data to be read.
         poll_result = dc_poll(env, err, server->poll_fds, server->num_fds, -1);
 
+        // End loop on an error when listening.
         if(poll_result < 0)
         {
             break;
         }
 
+        // No changes occur, return to the beginning of the loop.
         if(poll_result == 0)
         {
             continue;
@@ -622,16 +672,20 @@ static void server_loop(const struct dc_env *env, struct dc_error *err, const st
         // if it is closed everything moves down one spot.
         for(int i = 0; i < server->num_fds; i++)
         {
-            struct pollfd *poll_fd;
+            // dc_poll tells there was a change, now check to see which polling fd had the change.
+            struct pollfd *poll_fd; // Polling file descriptor to check.
 
+            // First fd is for incoming connections, second for pipe data from workers.
             poll_fd = &server->poll_fds[i];
 
+            // If there was a change in the file descriptor, handle the change.
             if(poll_fd->revents != 0)
             {
                 handle_change(env, err, settings, server, poll_fd);
             }
         }
 
+        // if error when checking polling file descriptors, end loop.
         if(dc_error_has_error(err))
         {
             done = true;
