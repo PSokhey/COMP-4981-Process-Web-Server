@@ -4,10 +4,12 @@
 #include <dc_posix/dc_unistd.h>
 #include <dc_util/io.h>
 
-
+//TODO: IMPLEMENT READING, PROCESSING, AND REPLIES BY THE WORKER PROCESS FOR CHAT SERVER.
+// TODO: NOTE - THESE FUNCTIONS ARE CALLED BY A WORKER PROCESS, NOT THE SERVER.
 static const int BLOCK_SIZE = 1024 * 4;
 
-
+// reads data sent from the client.
+// TODO: MODIFY FOR CHAT SERVER.
 ssize_t read_message_handler(const struct dc_env *env, struct dc_error *err, uint8_t **raw_data, int client_socket)
 {
     ssize_t bytes_read;
@@ -34,6 +36,8 @@ ssize_t read_message_handler(const struct dc_env *env, struct dc_error *err, uin
     return bytes_read;
 }
 
+// processes the data sent from the client.
+// TODO: MODIFY FOR CHAT SERVER.
 size_t process_message_handler(const struct dc_env *env, struct dc_error *err, const uint8_t *raw_data, uint8_t **processed_data, ssize_t count)
 {
     size_t processed_length;
@@ -47,6 +51,8 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
     return processed_length;
 }
 
+// sends data back to the client.
+// TODO: MODIFY FOR CHAT SERVER.
 void send_message_handler(const struct dc_env *env, struct dc_error *err, uint8_t *buffer, size_t count, int client_socket, bool *closed)
 {
     DC_TRACE(env);

@@ -461,6 +461,7 @@ static void usage(const struct dc_env *env, const char *program_name, const stru
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 // Signal handler for SIGINT, this code should remain unchanged.
+// Many parts of the program rely on this to know if the program is done or not.
 static void sigint_handler(int signal)
 {
     done = true;
@@ -649,6 +650,7 @@ static void server_loop(const struct dc_env *env, struct dc_error *err, const st
     DC_TRACE(env);
 
     // run endlessly until error or SIGINT.
+    // 'done' is a necessary global variable, do NOT remove.
     while(!done)
     {
         int poll_result;
@@ -686,6 +688,7 @@ static void server_loop(const struct dc_env *env, struct dc_error *err, const st
         }
 
         // if error when checking polling file descriptors, end loop.
+        // 'done' is a necessary global variable, do NOT remove.
         if(dc_error_has_error(err))
         {
             done = true;
@@ -693,6 +696,8 @@ static void server_loop(const struct dc_env *env, struct dc_error *err, const st
     }
 }
 
+// Handle changes in the polling file descriptors
+//TODO: THIS IS WHERE SERVER PROCESSES FOR CONNECTIONS AND WORKER IPC, NEED TO ADD CHAT PROTOCOL BRANCHING HERE.
 static bool handle_change(const struct dc_env *env, struct dc_error *err, const struct settings *settings, struct server_info *server, struct pollfd *poll_fd)
 {
     int fd;
@@ -704,6 +709,7 @@ static bool handle_change(const struct dc_env *env, struct dc_error *err, const 
     revents = poll_fd->revents;
     close_fd = -1;
 
+    // connection closed by client and mark for closing.
     if((unsigned int)revents & (unsigned int)POLLHUP)
     {
         if(fd != server->listening_socket && fd != server->pipe_fd)
@@ -711,23 +717,41 @@ static bool handle_change(const struct dc_env *env, struct dc_error *err, const 
             close_fd = fd;
         }
     }
+
+    // There is data to be read in the listening socket or pipe.
     else if((unsigned int)revents & (unsigned int)POLLIN)
     {
+        // If the file descriptor is the listening socket, accept the connection.
         if(fd == server->listening_socket)
         {
             accept_connection(env, err, settings, server);
         }
+
+        // If the file descriptor is the pipe, read the data sent from the worker processes.
+        // TODO: ADD CODE TO HANDLE DATA FROM WORKER PROCESSES FOR CHAT PROTOCOL.
+        // TODO: DATA SENT TO THE SERVER SHOULD ALREADY BE VERIFIED BY THE WORKER PROCESSES.
+        // TODO: IMPLIMENT A WAY TO KNOW WHEN TO SEND REVIVING SOCKET OR CLIENT DATA, WHAT WHAT DATA.
         else if(fd == server->pipe_fd)
         {
-            struct revive_message message;
+            //TODO: IF STATEMENT FOR REVIVING GOES HERE.
+            struct revive_message message; // information for socket to be revived.
 
+            // Read revive message from the pipe and revive socket.
             revive_socket(env, err, settings, server, &message);
 
+            // If marked for closing, close the connection.
             if(message.closed)
             {
                 close_fd = message.fd;
             }
+
+            //TODO: ELSE STATEMENT FOR CLIENT DATA TO BROADCAST GOES HERE.
+            //TODO: ELSE STATEMENT FOR UPDATES FROM CLIENT FOR DATABASE GO HERES.
         }
+
+        // If not listening socket or pipe, then it is a client socket ready to be read.
+        // Read the data from the client socket and write to the domain socket to be sent to the worker processes.
+        //TODO: DOMAIN SOCKET SHOULD BE ABLE TO BROADCAST, UPDATE, OR WRITE SOCKET TO DOMAIN SOCKET.
         else
         {
             poll_fd->events = 0;
@@ -735,6 +759,7 @@ static bool handle_change(const struct dc_env *env, struct dc_error *err, const 
         }
     }
 
+    // If the connection is to be closed, close the connection.
     if(close_fd > -1)
     {
         close_connection(env, err, settings, server, close_fd);
@@ -743,6 +768,7 @@ static bool handle_change(const struct dc_env *env, struct dc_error *err, const 
     return close_fd != -1;
 }
 
+// Accept a connection from a client and adds to the poll file descriptor array.
 static void accept_connection(const struct dc_env *env, struct dc_error *err, const struct settings *settings, struct server_info *server)
 {
     struct sockaddr_in client_address;
@@ -750,16 +776,28 @@ static void accept_connection(const struct dc_env *env, struct dc_error *err, co
     int client_socket;
 
     DC_TRACE(env);
+
+    // Allocate memory and accept the connection.
     client_address_len = sizeof(client_address);
     client_socket = dc_accept(env, err, server->listening_socket, (struct sockaddr *)&client_address, &client_address_len);
+
+    // Add the new connection to the poll file descriptor array.
+    // Resize the memory in the array if needed.
     server->poll_fds = (struct pollfd *)dc_realloc(env, err, server->poll_fds, (server->num_fds + 2) * sizeof(struct pollfd));
+    // Add the new connection to the poll file descriptor array.
     server->poll_fds[server->num_fds].fd = client_socket;
+    // Poll for changes in the file descriptor, data to be read.
     server->poll_fds[server->num_fds].events = POLLIN | POLLHUP;
+    // reset events to read.
     server->poll_fds[server->num_fds].revents = 0;
+    // Increment the number of file descriptors.
     server->num_fds++;
+    // Display the connection information.
     print_socket(env, err, "Accepted connection from", client_socket, settings->verbose_server);
 }
 
+// Writing a client socket to a worker process through domain socket,
+// This code should not be changed.
 static void write_socket_to_domain_socket(const struct dc_env *env, struct dc_error *err, const struct settings *settings, const struct server_info *server, int client_socket)
 {
     struct msghdr msg;
@@ -767,6 +805,8 @@ static void write_socket_to_domain_socket(const struct dc_env *env, struct dc_er
     char control_buf[CMSG_SPACE(sizeof(int))];
     struct cmsghdr *cmsg;
 
+    // Following is a metadata to send a file descriptor through a domain socket.
+    // This code should NOT be changed for the chat protocol.
     DC_TRACE(env);
     dc_memset(env, &msg, 0, sizeof(msg));
     dc_memset(env, &iov, 0, sizeof(iov));
@@ -799,24 +839,32 @@ static void write_socket_to_domain_socket(const struct dc_env *env, struct dc_er
     }
 }
 
+// Revive a socket that was closed by a client, this code should remain unchanged.
 static void revive_socket(const struct dc_env *env, struct dc_error *err, const struct settings *settings, const struct server_info *server, struct revive_message *message)
 {
     DC_TRACE(env);
 
+    // Wait for the domain listening_socket to be available.
     dc_sem_wait(env, err, server->domain_sem);
+    // Read the message from the pipe and put in the revive_message struct.
     dc_read(env, err, server->pipe_fd, message, sizeof(*message));
 
+    // If there was no error, revive the listening_socket.
     if(dc_error_has_no_error(err))
     {
         print_fd(env, "Reviving listening_socket", message->fd, settings->verbose_server);
         dc_sem_post(env, err, server->domain_sem);
 
+        // because the first two file descriptors are the listening_socket and pipe,
+        // the index starts with the first client listening_socket.
+        // Finding the correct client listening socket and revive it.
         for(int i = 2; i < server->num_fds; i++)
         {
             struct pollfd *pfd;
 
             pfd = &server->poll_fds[i];
 
+            // Revive the listening_socket to read data from and listen for disconnects.
             if(pfd->fd == message->fd)
             {
                 pfd->events = POLLIN | POLLHUP;
@@ -825,12 +873,15 @@ static void revive_socket(const struct dc_env *env, struct dc_error *err, const 
     }
 }
 
+// Close a connection to a client, code should not be changed.
 static void close_connection(const struct dc_env *env, struct dc_error *err, const struct settings *settings, struct server_info *server, int client_socket)
 {
     DC_TRACE(env);
     print_fd(env, "Closing", client_socket, settings->verbose_server);
+    // Close the client listening_socket.
     dc_close(env, err, client_socket);
 
+    // Shifting the file descriptors in the poll file descriptor array to the left.
     for(int i = 0; i < server->num_fds; i++)
     {
         if(server->poll_fds[i].fd == client_socket)
@@ -844,19 +895,24 @@ static void close_connection(const struct dc_env *env, struct dc_error *err, con
         }
     }
 
+    // Reduce the number of file descriptors.
     server->num_fds--;
 
+    // If server and no more clients, free the poll file descriptor array.
     if(server->num_fds == 0)
     {
         free(server->poll_fds);
         server->poll_fds = NULL;
     }
+
+    // If there are still clients, reallocate the poll file descriptor array.
     else
     {
         server->poll_fds = (struct pollfd *)realloc(server->poll_fds, server->num_fds * sizeof(struct pollfd));
     }
 }
 
+// Server process is closing and waiting for the workers to finish, code should NOT be changed.
 static void wait_for_workers(const struct dc_env *env, struct dc_error *err, struct server_info *server)
 {
     DC_TRACE(env);
@@ -886,20 +942,27 @@ static void worker_process(struct dc_env *env, struct dc_error *err, struct work
 
     DC_TRACE(env);
 
+    // Set the tracer to the default tracer if debug is enabled.
     if(settings->debug_handler)
     {
         dc_env_set_tracer(env, dc_env_default_tracer);
     }
+
+    // Otherwise set the tracer to NULL.
     else
     {
         dc_env_set_tracer(env, NULL);
     }
 
+    // Get the pid of the worker process.
     pid = dc_getpid(env);
     printf("Started worker (%d)\n", pid);
 
+    // Main worker loop to process messages.
+    // 'done' is a necessary global variable, do NOT remove.
     while(!done)
     {
+        // Process incoming messages from the client.
         process_message(env, err, worker, settings);
 
         if(dc_error_has_error(err))
@@ -909,10 +972,15 @@ static void worker_process(struct dc_env *env, struct dc_error *err, struct work
         }
     }
 
+    // If out of the loop, worker is done so close IPC and exit.
     dc_close(env, err, worker->domain_socket);
     dc_close(env, err, worker->pipe_fd);
 }
 
+// The worker process reading from the domain socket for the client socket.
+// This code should NOT be changed.
+//TODO: REPLICATE HOW WORKER READS DOMAIN SOCKET
+// FOR DATA FROM MAIN PROCESS IN ANOTHER FUNCTION FOR CHAT PROTOCOL IMPLEMENTATION.
 static bool extract_message_parameters(const struct dc_env *env, struct dc_error *err, struct worker_info *worker, int *client_socket, int *value)
 {
     struct msghdr msg;
@@ -924,6 +992,10 @@ static bool extract_message_parameters(const struct dc_env *env, struct dc_error
     bool got_message;
 
     DC_TRACE(env);
+
+    // Metadata for receiving file descriptor from main server process.
+    // the file descriptor is the client socket to communicate on.
+    // this should NOT be changed when implementing the chat protocol.
     dc_memset(env, &msg, 0, sizeof(msg));
     dc_memset(env, &io, 0, sizeof(io));
     dc_memset(env, buf, '\0', sizeof(buf));
@@ -938,28 +1010,41 @@ static bool extract_message_parameters(const struct dc_env *env, struct dc_error
     FD_ZERO(&read_fds);
     FD_SET(worker->domain_socket, &read_fds);
 
+    // Waiting for domain socket to be free for reading.
     dc_sem_wait(env, err, worker->select_sem);
 
+    // checks if the server program is done, if so got message is false.
+    // 'done' is a necessary global variable, do NOT remove.
     if(done)
     {
         got_message = false;
     }
+
+    // If not done, worker will read from the domain socket to get client socket from main server process.
     else
     {
+        // Worker waits for a message from the server through the domain socket.
         result = dc_select(env, err, worker->domain_socket + 1, &read_fds, NULL, NULL, NULL);
 
+        // Worker process received.
         if(result > 0)
         {
+            // Read the message from the domain socket and sets read as true.
             dc_recvmsg(env, err, worker->domain_socket, &msg, 0);
             got_message = true;
         }
+
+        // Worker process did not receive.
         else
         {
             got_message = false;
         }
 
+        // Worker process is done reading from the domain socket.
         dc_sem_post(env, err, worker->select_sem);
 
+        // Worker process sets the client socket to the received client socket from
+        // the main server process.
         if(got_message)
         {
             cmsg = CMSG_FIRSTHDR(&msg);
@@ -970,45 +1055,63 @@ static bool extract_message_parameters(const struct dc_env *env, struct dc_error
     return got_message;
 }
 
+// Used by the worker process to process messages from the client.
+// TODO:BE CAUTIOUS CHANGING CODE HERE, WORKER USES PIPES TO REVIVE CLIENT SOCKETS.**********
+// TODO: MODIFY READER, PROCESSOR, AND SENDER FROM ECHO.C TO IMPLEMENT CHAT PROTOCOL.
+// TODO: MAY NEED TO CHANGE CODE HERE FOR CHAT PROTOCOL IMPLEMENTATION.
 static void process_message(const struct dc_env *env, struct dc_error *err, struct worker_info *worker, const struct settings *settings)
 {
     int client_socket;
     int fd;
     bool got_message;
 
+    // Extract the message parameters from the domain socket to get the client socket.
     client_socket = -1;
     got_message = extract_message_parameters(env, err, worker, &client_socket, &fd);
 
+    // If worker process received the client socket from the main server process and
+    // had no errors
     if(got_message && dc_error_has_no_error(err))
     {
         uint8_t *raw_data;
         ssize_t raw_data_length;
         bool closed;
 
+        // Worker process reads the raw data from the client.
         print_fd(env, "Started working on", fd, settings->verbose_handler);
         raw_data = NULL;
+        // use reader from the passed in library to read the data from the client socket.
         raw_data_length = worker->message_handler.reader(env, err, &raw_data, client_socket);
-        closed = true; // set it to true so if the client forgets to set it the connection is closed which is probably bad for some things - making it noticed, also if there is an issue reading/writing probably should close.
+        closed = true; // (D'Arcy Note) set it to true so if the client forgets to set it the connection is closed which is probably bad for some things - making it noticed, also if there is an issue reading/writing probably should close.
 
+        // If no errors when reading, process the raw data and send reply.
         if(dc_error_has_no_error(err))
         {
+            // If the raw data length is 0, the client has closed the connection.
             if(raw_data_length == 0)
             {
                 closed = true;
             }
+
+            // Else there is data to process.
             else
             {
                 uint8_t *processed_data;
                 size_t processed_data_length;
 
+                // Process the raw data received.
                 processed_data = NULL;
+                // use processor from the passed in library to process the data.
                 processed_data_length = worker->message_handler.processor(env, err, raw_data, &processed_data, raw_data_length);
 
+                // If no errors when processing, send the processed data to the client.
                 if(dc_error_has_no_error(err))
                 {
+                    // use sender from the passed in library to send the data to the client.
                     worker->message_handler.sender(env, err, processed_data, processed_data_length, client_socket, &closed);
                 }
 
+                // Free the processed data.
                 if(processed_data)
                 {
                     dc_free(env, processed_data);
@@ -1016,16 +1119,22 @@ static void process_message(const struct dc_env *env, struct dc_error *err, stru
             }
         }
 
+        // Free the raw data.
         if(raw_data)
         {
             dc_free(env, raw_data);
         }
 
+        // Revive the client socket.
         print_fd(env, "Done working on", fd, settings->verbose_handler);
+        // Use the pipe to communicate to main process to revive client socket.
         send_revive(env, err, worker, client_socket, fd, closed);
     }
 }
 
+// Worker uses pipes to communicate with main server process to revive client sockets.
+// do NOT change code here.
+// TODO: NOTE HOW WORKER COMMUNICATES WITH MAIN PROCESS WITH WRITING TO PIPE, DONT CHANGE CODE.
 static void send_revive(const struct dc_env *env, struct dc_error *err, struct worker_info *worker, int client_socket, int fd, bool closed)
 {
     struct revive_message message;
@@ -1040,6 +1149,7 @@ static void send_revive(const struct dc_env *env, struct dc_error *err, struct w
     dc_close(env, err, client_socket);
 }
 
+// For debugging purposes, should not be changed for chat server protocol.
 static void print_fd(const struct dc_env *env, const char *message, int fd, bool display)
 {
     DC_TRACE(env);
@@ -1050,6 +1160,7 @@ static void print_fd(const struct dc_env *env, const char *message, int fd, bool
     }
 }
 
+// for differentiating between connected clients.
 static void print_socket(const struct dc_env *env, struct dc_error *err, const char *message, int socket, bool display)
 {
     DC_TRACE(env);
