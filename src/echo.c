@@ -22,7 +22,7 @@ struct http_request {
 
 static void parse_request(const struct dc_env *env, const struct dc_error *err, struct http_request *http, char* req) {
     DC_TRACE(env);
-    printf("%s\n", req);
+    printf("Request received:\n%s\n", req);
     
     char* tempreq;
     tempreq = strdup(req);
@@ -89,9 +89,34 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
 
     parse_request(env, err, &http, raw_data);
 
-    printf("%s\n", http.method);
-    printf("%s\n", http.resource);
-    printf("%s\n", http.version);
+    printf("method:% s\n", http.method);
+    printf("resource: %s\n", http.resource);
+    printf("version: %s\n", http.version);
+
+    printf("\nRout tracking:\n\n");
+    // If the http request is a GET request then do the following
+    if (strcmp(http.method, "GET") == 0) {
+        printf("GET request received\n");
+
+        // If the resource is / then send the index.html file
+        if (http.resource == "/") {
+
+        }
+    }
+
+    else if (strcmp(http.method, "HEAD") == 0) {
+        printf("HEAD request received\n");
+
+    }
+
+    else if (strcmp(http.method, "POST") == 0) {
+        printf("POST request received\n");
+
+    }
+
+    else {
+        // If the http request is not a valid request then send a 400 Bad Request response
+    }
 
     processed_length = count * sizeof(**processed_data);
     *processed_data = dc_malloc(env, err, processed_length);
