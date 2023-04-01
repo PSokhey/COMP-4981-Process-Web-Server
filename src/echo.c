@@ -27,11 +27,8 @@ static void parse_request(const struct dc_env *env, const struct dc_error *err, 
     char* tempreq;
     tempreq = strdup(req);
 
-    printf("Getting method\n");
     http->method = dc_strtok_r(env, tempreq, " ", &tempreq);
-    printf("Getting resource\n");
     http->resource = dc_strtok_r(env, tempreq, " ", &tempreq);
-    printf("Getting version\n");
     http->version = dc_strtok_r(env, tempreq, "\n", &tempreq);
     char* token;
     while ((token = dc_strtok_r(env, tempreq, "\n", &tempreq)) != NULL) {
@@ -58,7 +55,6 @@ ssize_t read_message_handler(const struct dc_env *env, struct dc_error *err, uin
     ssize_t bytes_read;
     size_t buffer_len;
     uint8_t *buffer;
-    struct http_request http;
 
     DC_TRACE(env);
     buffer_len = BLOCK_SIZE * sizeof(*buffer);
@@ -86,9 +82,16 @@ ssize_t read_message_handler(const struct dc_env *env, struct dc_error *err, uin
 // TODO: PROCESS HTTP REQUEST HERE.
 size_t process_message_handler(const struct dc_env *env, struct dc_error *err, const uint8_t *raw_data, uint8_t **processed_data, ssize_t count)
 {
+    struct http_request http;
     size_t processed_length;
 
     DC_TRACE(env);
+
+    parse_request(env, err, &http, raw_data);
+
+    printf("%s\n", http.method);
+    printf("%s\n", http.resource);
+    printf("%s\n", http.version);
 
     processed_length = count * sizeof(**processed_data);
     *processed_data = dc_malloc(env, err, processed_length);
