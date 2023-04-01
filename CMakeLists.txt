@@ -44,9 +44,11 @@ set(CLIENT_REQUIRED_LIBRARIES_LIST
         )
 set(ECHO_SOURCE_LIST
         ${SOURCE_DIR}/echo.c
+        ${SOURCE_DIR}/database.c
         )
 set(ECHO_HEADER_LIST
         ${INCLUDE_DIR}/processor.h
+        ${INCLUDE_DIR}/database.h
         )
 set(ECHO_REQUIRED_LIBRARIES_LIST
         dc_error

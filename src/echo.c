@@ -8,6 +8,7 @@
 #include <dc_posix/dc_string.h>
 #include <ndbm.h>
 #include <fcntl.h>
+#include "database.h"
 
 static const int BLOCK_SIZE = 1024 * 4;
 
