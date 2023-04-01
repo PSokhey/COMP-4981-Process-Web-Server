@@ -3,12 +3,12 @@
 #include <dc_c/dc_string.h>
 #include <dc_posix/dc_unistd.h>
 #include <dc_util/io.h>
-#include <stdio.h>
+//#include <stdio.h>
 #include <string.h>
 #include <dc_posix/dc_string.h>
 #include <ndbm.h>
-#include <fcntl.h>
 #include "database.h"
+
 
 static const int BLOCK_SIZE = 1024 * 4;
 
@@ -122,6 +122,8 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
         printf("POST request received\n");
 
 
+        // open the database
+        DBM *db = dbm_open("database", O_RDWR, 0666);
     }
 
     else {
