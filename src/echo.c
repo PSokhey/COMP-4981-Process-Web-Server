@@ -3,10 +3,8 @@
 #include <dc_c/dc_string.h>
 #include <dc_posix/dc_unistd.h>
 #include <dc_util/io.h>
-//#include <stdio.h>
 #include <string.h>
 #include <dc_posix/dc_string.h>
-#include <ndbm.h>
 #include "database.h"
 
 

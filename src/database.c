@@ -23,3 +23,29 @@ void generate_uuid(char *uuid_str) {
             "%08x-%04x-%04x-%04x-%08x%08x",
             part1, part2, part3, part4, part5, part6);
 }
+
+// print all data in the database for debugging purposes
+static void print_db() {
+
+    DBM* db = dbm_open("mydatabase", O_CREAT | O_RDWR, 0666);
+
+    datum k, v;
+
+    printf("\nFollowing messages are stored in the database:\n");
+
+    // iterate over all entries in the database
+    for (k = dbm_firstkey(db); k.dptr; k = dbm_nextkey(db)) {
+        // retrieve the value (the message) from the database
+        v = dbm_fetch(db, k);
+        if (v.dptr) {
+            // print the key and value
+            //printf(" %.*s\n", (int)v.dsize, v.dptr);
+            printf("%.*s: %.*s\n", (int)k.dsize, k.dptr, (int)v.dsize, v.dptr);
+            dbm_clearerr(db);
+        } else {
+            fprintf(stderr, "Key not found.\n");
+        }
+    }
+
+    dbm_close(db);
+}
