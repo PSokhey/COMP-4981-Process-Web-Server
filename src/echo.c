@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <dc_posix/dc_string.h>
+#include <ndbm.h>
+#include <fcntl.h>
 
 static const int BLOCK_SIZE = 1024 * 4;
 
@@ -102,6 +104,12 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
         if (http.resource == "/") {
 
         }
+
+        // if request for what is in the databse.
+        else if (http.resource == "/database") {
+            // send the database file
+            printf("database request received\n");
+        }
     }
 
     else if (strcmp(http.method, "HEAD") == 0) {
@@ -111,6 +119,7 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
 
     else if (strcmp(http.method, "POST") == 0) {
         printf("POST request received\n");
+
 
     }
 
