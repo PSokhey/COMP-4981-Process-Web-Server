@@ -295,6 +295,8 @@ function(link_libraries target_name libraries_list)
         unset(LIB CACHE)
         unset(LIB_DIR CACHE)
     endforeach ()
+    target_link_libraries(${target_name} PRIVATE -lgdbm)
+    target_link_libraries(${target_name} PRIVATE -lgdbm_compat)
 endfunction()
 
 function(link_ncurses_libraries target_name)
