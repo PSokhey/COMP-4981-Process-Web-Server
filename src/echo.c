@@ -6,8 +6,40 @@
 
 static const int BLOCK_SIZE = 1024 * 4;
 
-// reads data sent from the client.
+struct http_request {
+    char* method;
+    char* resource;
+    char* version;
+    char* agent;
+    char* host;
+    char* language;
+    char* encoding;
+    char* keep_connection;
+};
 
+static void parse_request(const struct dc_env *env, const struct dc_error *err, struct http_request *http, char* req) {
+    http->method = dc_strtok(env, req, " ");
+    http->resource = dc_strtok(env, req, " ");
+    http->version = dc_strtok(env, req, "\n");
+    char* token;
+    while ((token = dc_strtok(env, req, "\n")) != NULL) {
+        char* field;
+        field = dc_strtok(env, token, " ");
+        if (dc_strcmp(env, field, "User-Agent:") == 0) {
+            http->agent = token;
+        } else if (dc_strcmp(env, field, "Host:") == 0) {
+            http->host = token;
+        } else if (dc_strcmp(env, field, "Accept-Language:") == 0) {
+            http->language = token;
+        } else if (dc_strcmp(env, field, "Accept-Encoding:") == 0) {
+            http->encoding = token;
+        } else if (dc_strcmp(env, field, "Connection:") == 0) {
+            http->keep_connection = token;
+        }
+    }
+}
+
+// reads data sent from the client.
 // TODO: READ THE MESSAGE FROM THE CLIENT.
 ssize_t read_message_handler(const struct dc_env *env, struct dc_error *err, uint8_t **raw_data, int client_socket)
 {
