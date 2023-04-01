@@ -3,6 +3,9 @@
 #include <dc_c/dc_string.h>
 #include <dc_posix/dc_unistd.h>
 #include <dc_util/io.h>
+#include <stdio.h>
+#include <string.h>
+#include <dc_posix/dc_string.h>
 
 static const int BLOCK_SIZE = 1024 * 4;
 
@@ -18,13 +21,22 @@ struct http_request {
 };
 
 static void parse_request(const struct dc_env *env, const struct dc_error *err, struct http_request *http, char* req) {
-    http->method = dc_strtok(env, req, " ");
-    http->resource = dc_strtok(env, req, " ");
-    http->version = dc_strtok(env, req, "\n");
+    DC_TRACE(env);
+    printf("%s\n", req);
+    
+    char* tempreq;
+    tempreq = strdup(req);
+
+    printf("Getting method\n");
+    http->method = dc_strtok_r(env, tempreq, " ", &tempreq);
+    printf("Getting resource\n");
+    http->resource = dc_strtok_r(env, tempreq, " ", &tempreq);
+    printf("Getting version\n");
+    http->version = dc_strtok_r(env, tempreq, "\n", &tempreq);
     char* token;
-    while ((token = dc_strtok(env, req, "\n")) != NULL) {
+    while ((token = dc_strtok_r(env, tempreq, "\n", &tempreq)) != NULL) {
         char* field;
-        field = dc_strtok(env, token, " ");
+        field = dc_strtok_r(env, token, " ", &token);
         if (dc_strcmp(env, field, "User-Agent:") == 0) {
             http->agent = token;
         } else if (dc_strcmp(env, field, "Host:") == 0) {
@@ -46,6 +58,7 @@ ssize_t read_message_handler(const struct dc_env *env, struct dc_error *err, uin
     ssize_t bytes_read;
     size_t buffer_len;
     uint8_t *buffer;
+    struct http_request http;
 
     DC_TRACE(env);
     buffer_len = BLOCK_SIZE * sizeof(*buffer);
