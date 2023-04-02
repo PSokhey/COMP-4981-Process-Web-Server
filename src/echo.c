@@ -186,18 +186,21 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
         printf("GET request received\n");
         char* content;
         char* content_type;
-        int fd;
+        int fd = 0;
 
         // If the resource is / then send the index.html file
         if (strcmp(http.resource, "/") == 0) {
             printf("index.html request received\n");
             // send the index.html file
-            fd = open("/index.html", O_RDONLY);
+            printf("File requested: ./html/index.html\n");
+            fd = open("./html/index.html", O_RDONLY | O_DSYNC);
+            printf("fd: %d\n", fd);
             if (fd <= 0) {
 
             } else {
                 read(fd, content, BLOCK_SIZE);
                 content_type = strdup("text/html");
+                printf("Requested file found: ./html/index.html\n");
                 send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
             }
         }
@@ -210,15 +213,23 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             printf("\nFollowing is what is currently in the database:\n\n");
             print_db();
         } else {
-            fd = open(http.resource, O_RDONLY);
+            char* reqconcat;
+            reqconcat = strdup("./html");
+            reqconcat = strcat(reqconcat, http.resource);
+            printf("File requested: %s\n", reqconcat);
+            printf("fd: %d\n", fd);
+            fd = open(reqconcat, O_RDONLY | O_DSYNC);
+            printf("fd: %d\n", fd);
             if (fd <= 0) {
 
             } else {
                 read(fd, content, BLOCK_SIZE);
+                printf("Requested file found found: %s\n", reqconcat);
                 content_type = get_content_type(http.resource);
                 send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
             }
         }
+        close(fd);
     }
 
     else if (strcmp(http.method, "HEAD") == 0) {
@@ -231,10 +242,11 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
         if (strcmp(http.resource, "/") == 0) {
             printf("index.html request received\n");
             // send the index.html file
-            fd = open("/index.html", O_RDONLY);
+            fd = open("./html/index.html", O_RDONLY | O_DSYNC);
             if (fd <= 0) {
 
             } else {
+
                 read(fd, content, BLOCK_SIZE);
                 content_type = strdup("text/html");
                 send_http_head_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
@@ -249,7 +261,10 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             printf("\nFollowing is what is currently in the database:\n\n");
             print_db();
         } else {
-            fd = open(http.resource, O_RDONLY);
+            char* reqconcat;
+            reqconcat = strdup("./html");
+            reqconcat = strcat(reqconcat, http.resource);
+            fd = open(reqconcat, O_RDONLY | O_DSYNC);
             if (fd <= 0) {
 
             } else {
