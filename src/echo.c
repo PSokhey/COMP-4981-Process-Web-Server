@@ -199,6 +199,12 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
     else if(strcmp(http.method, "DELETE") == 0) {
         printf("DELETE request received\n");
         delete_db();
+
+        // Send success response to client of deleted successfully.
+        const char *content_type = "text/plain";
+        const char *content = "Database deleted successfully";
+        send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
+
     }
 
 

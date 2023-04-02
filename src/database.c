@@ -47,6 +47,7 @@ void print_db() {
     dbm_close(db);
 }
 
+// delete all entries in the database.
 void delete_db() {
 
     DBM* db;
@@ -63,8 +64,9 @@ void delete_db() {
             fprintf(stderr, "Error: Failed to delete key %s from database.\n", key.dptr);
             exit(1);
         }
+
+        // get the next key, using first instead next because pier first key is now deleted.
         key = dbm_firstkey(db);
-        //key = dbm_nextkey(db);
     }
 
     printf("Database deleted successfully.\n");
