@@ -167,7 +167,8 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             generate_uuid(uuid);
 
             // test data to insert into database.
-            char* test = "test";
+            //char* test = "test";
+            char* test = strstr(raw_data, "\r\n\r\n") + 4;
 
             // insert into database.
             datum key, value;
