@@ -46,3 +46,29 @@ void print_db() {
 
     dbm_close(db);
 }
+
+void delete_db() {
+
+    DBM* db;
+    db = dbm_open("database", O_RDWR, 0666);
+    if (!db) {
+        fprintf(stderr, "Error: Failed to open database.\n");
+        exit(1);
+    }
+
+    datum key;
+    key = dbm_firstkey(db);
+    while (key.dptr != NULL) {
+        if (dbm_delete(db, key) == -1) {
+            fprintf(stderr, "Error: Failed to delete key %s from database.\n", key.dptr);
+            exit(1);
+        }
+        key = dbm_firstkey(db);
+        //key = dbm_nextkey(db);
+    }
+
+    printf("Database deleted successfully.\n");
+
+    dbm_close(db);
+
+}

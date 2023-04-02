@@ -170,6 +170,13 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
 
     }
 
+    // Delete route.
+    else if(strcmp(http.method, "DELETE") == 0) {
+        printf("DELETE request received\n");
+        delete_db();
+    }
+
+
     else {
         // If the http request is not a valid request then send a 400 Bad Request response
     }

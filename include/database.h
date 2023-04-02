@@ -18,5 +18,8 @@ void generate_uuid(char *uuid_str);
 // print all data in the database for debugging purposes
 void print_db();
 
+// delete the database.
+void delete_db();
+
 #endif //PROCESS_SERVER_DATABASE_H
 
