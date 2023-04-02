@@ -6,6 +6,8 @@
 #include <string.h>
 #include <dc_posix/dc_string.h>
 
+#define REQUEST_SUCCESS 200
+
 
 static const int BLOCK_SIZE = 1024 * 4;
 
@@ -19,7 +21,24 @@ struct http_request {
     char* encoding;
     char* keep_connection;
 };
+// sending a response to the client.
+void send_http_response(const struct dc_env *env, struct dc_error *err, int client_socket, int status_code, const char *content_type, const char *content) {
+    char response_header[256];
+    size_t content_length = strlen(content);
 
+    snprintf(response_header, sizeof(response_header),
+             "HTTP/1.0 %d OK\r\n"
+             "Content-Type: %s\r\n"
+             "Content-Length: %zu\r\n"
+             "\r\n",
+             status_code, content_type, content_length);
+
+    dc_write_fully(env, err, client_socket, (uint8_t *)response_header, strlen(response_header));
+    dc_write_fully(env, err, client_socket, (uint8_t *)content, content_length);
+}
+
+
+// reads data sent from the client.
 static void parse_request(const struct dc_env *env, const struct dc_error *err, struct http_request *http, char* req) {
     DC_TRACE(env);
     printf("Request received:\n%s\n", req);
@@ -80,7 +99,7 @@ ssize_t read_message_handler(const struct dc_env *env, struct dc_error *err, uin
 
 
 // TODO: PROCESS HTTP REQUEST HERE.
-size_t process_message_handler(const struct dc_env *env, struct dc_error *err, const uint8_t *raw_data, uint8_t **processed_data, ssize_t count)
+size_t process_message_handler(const struct dc_env *env, struct dc_error *err, const uint8_t *raw_data, uint8_t **processed_data, ssize_t count, int client_socket)
 {
     struct http_request http;
     size_t processed_length;
@@ -134,6 +153,7 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             if(!db) {
                 // print error for database could not be opened.
                 fprintf(stderr, "Database Error: Database could not be open.\n");
+                // TODO: send error message to client AND BREAK OUT OF FUNCTION.
             }
 
             // generate UUID.
@@ -154,6 +174,7 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             if(dbm_store(db, key, value, DBM_INSERT) != 0) {
                 // print error for database could not be opened.
                 fprintf(stderr, "Database Error: Could not insert into database.\n");
+                //TODO: send error message to client AND BREAK OUT OF FUNCTION.
             }
 
             // following was inserted into the database.
@@ -161,10 +182,14 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             printf("key: %s\n", key.dptr);
             printf("value: %s\n", value.dptr);
 
-
             // close the database.
             dbm_close(db);
 
+            // Send success response to client.
+            // Send a response indicating the data was successfully stored
+            const char *content_type = "text/plain";
+            const char *content = "Data stored successfully";
+            send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
 
         }
 
@@ -193,7 +218,7 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
 void send_message_handler(const struct dc_env *env, struct dc_error *err, uint8_t *buffer, size_t count, int client_socket, bool *closed)
 {
     DC_TRACE(env);
-    dc_write_fully(env, err, client_socket, buffer, count);
+    //dc_write_fully(env, err, client_socket, buffer, count);
     *closed = false;
 
 

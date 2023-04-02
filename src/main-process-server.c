@@ -25,7 +25,7 @@
 
 
 typedef ssize_t (*read_message_func)(const struct dc_env *env, struct dc_error *err, uint8_t **raw_data, int client_socket);
-typedef size_t (*process_message_func)(const struct dc_env *env, struct dc_error *err, const uint8_t *raw_data, uint8_t **processed_data, ssize_t count);
+typedef size_t (*process_message_func)(const struct dc_env *env, struct dc_error *err, const uint8_t *raw_data, uint8_t **processed_data, ssize_t count, int client_socket);
 typedef void (*send_message_func)(const struct dc_env *env, struct dc_error *err, uint8_t *buffer, size_t count, int client_socket, bool *closed);
 
 // Settings information passed to the server.
@@ -1104,7 +1104,7 @@ static void process_message(const struct dc_env *env, struct dc_error *err, stru
                 processed_data = NULL;
                 // use processor from the passed in library to process the data.
                 printf("\nprocessing message\n\n");
-                processed_data_length = worker->message_handler.processor(env, err, raw_data, &processed_data, raw_data_length);
+                processed_data_length = worker->message_handler.processor(env, err, raw_data, &processed_data, raw_data_length, client_socket);
 
                 // If no errors when processing, send the processed data to the client.
                 if(dc_error_has_no_error(err))
