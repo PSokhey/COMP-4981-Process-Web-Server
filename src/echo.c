@@ -5,7 +5,6 @@
 #include <dc_util/io.h>
 #include <string.h>
 #include <dc_posix/dc_string.h>
-#include "database.h"
 
 
 static const int BLOCK_SIZE = 1024 * 4;
@@ -100,14 +99,19 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
         printf("GET request received\n");
 
         // If the resource is / then send the index.html file
-        if (http.resource == "/") {
+        if (strcmp(http.resource, "/") == 0 || strcmp(http.resource, "/index.html") == 0) {
+            printf("index.html request received\n");
+            // send the index.html file
 
         }
 
-        // if request for what is in the databse.
-        else if (http.resource == "/database") {
+        // if request for what is in the database.
+        else if (strcmp(http.resource, "/getDatabase") == 0) {
             // send the database file
-            printf("database request received\n");
+            printf("database log request received\n");
+            // test what is currently in the database.
+            printf("\nFollowing is what is currently in the database:\n\n");
+            print_db();
         }
     }
 
@@ -117,11 +121,53 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
     }
 
     else if (strcmp(http.method, "POST") == 0) {
-        printf("POST request received\n");
+
+        // have something to insert into the database.
+        // set to true while testing database behavior.
+        if (true) {
+            printf("POST request received and inserting to database.\n");
 
 
-        // open the database
-        DBM *db = dbm_open("database", O_RDWR, 0666);
+            // open the database
+            DBM *db = dbm_open("database", O_CREAT | O_RDWR, 0666);
+
+            if(!db) {
+                // print error for database could not be opened.
+                fprintf(stderr, "Database Error: Database could not be open.\n");
+            }
+
+            // generate UUID.
+            char uuid[37];
+            generate_uuid(uuid);
+
+            // test data to insert into database.
+            char* test = "test";
+
+            // insert into database.
+            datum key, value;
+            key.dptr = uuid;
+            key.dsize = strlen(uuid);
+            value.dptr = test;
+            value.dsize = strlen(test);
+
+            // insert into database.
+            if(dbm_store(db, key, value, DBM_INSERT) != 0) {
+                // print error for database could not be opened.
+                fprintf(stderr, "Database Error: Could not insert into database.\n");
+            }
+
+            // following was inserted into the database.
+            printf("Following was inserted into the database:\n");
+            printf("key: %s\n", key.dptr);
+            printf("value: %s\n", value.dptr);
+
+
+            // close the database.
+            dbm_close(db);
+
+
+        }
+
     }
 
     else {
@@ -142,4 +188,6 @@ void send_message_handler(const struct dc_env *env, struct dc_error *err, uint8_
     DC_TRACE(env);
     dc_write_fully(env, err, client_socket, buffer, count);
     *closed = false;
+
+
 }

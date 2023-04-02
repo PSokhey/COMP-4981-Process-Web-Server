@@ -1,9 +1,6 @@
 //
 // Created by prabh on 01/04/23.
 //
-
-
-
 #include "database.h"
 
 void generate_uuid(char *uuid_str) {
@@ -25,9 +22,9 @@ void generate_uuid(char *uuid_str) {
 }
 
 // print all data in the database for debugging purposes
-static void print_db() {
+void print_db() {
 
-    DBM* db = dbm_open("mydatabase", O_CREAT | O_RDWR, 0666);
+    DBM* db = dbm_open("database", O_CREAT | O_RDWR, 0666);
 
     datum k, v;
 

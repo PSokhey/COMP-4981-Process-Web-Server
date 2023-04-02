@@ -11,12 +11,12 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <ndbm.h>
-#include "database.h"
-
-#endif //PROCESS_SERVER_DATABASE_H
 
 // gererate a random UUID
 void generate_uuid(char *uuid_str);
 
 // print all data in the database for debugging purposes
-static void print_db();
+void print_db();
+
+#endif //PROCESS_SERVER_DATABASE_H
+
