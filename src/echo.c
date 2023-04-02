@@ -131,6 +131,12 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             // test what is currently in the database.
             printf("\nFollowing is what is currently in the database:\n\n");
             print_db();
+
+            // Send a response indicating the data was successfully stored
+            const char *content_type = "text/plain";
+            const char *content = "Database replied successfully.";
+            send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
+
         }
     }
 
