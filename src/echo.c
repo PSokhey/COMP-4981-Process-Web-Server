@@ -193,14 +193,15 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             printf("index.html request received\n");
             // send the index.html file
             printf("File requested: ./html/index.html\n");
-            fd = open("./html/index.html", O_RDONLY | O_DSYNC);
+            fd = open("./html/index.html", O_RDONLY | O_SYNC);
             printf("fd: %d\n", fd);
             if (fd <= 0) {
 
             } else {
+                printf("Requested file found: ./html/index.html\n");
                 read(fd, content, BLOCK_SIZE);
                 content_type = strdup("text/html");
-                printf("Requested file found: ./html/index.html\n");
+                //printf("Sending file: ./html/index.html\nContent type: %s\n", content_type);
                 send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
             }
         }
@@ -217,15 +218,15 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             reqconcat = strdup("./html");
             reqconcat = strcat(reqconcat, http.resource);
             printf("File requested: %s\n", reqconcat);
-            printf("fd: %d\n", fd);
-            fd = open(reqconcat, O_RDONLY | O_DSYNC);
+            fd = open(reqconcat, O_RDONLY | O_SYNC);
             printf("fd: %d\n", fd);
             if (fd <= 0) {
 
             } else {
-                read(fd, content, BLOCK_SIZE);
                 printf("Requested file found found: %s\n", reqconcat);
+                read(fd, content, BLOCK_SIZE);
                 content_type = get_content_type(http.resource);
+                //printf("Sending file: %s\nContent type: %s\n", reqconcat, content_type);
                 send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
             }
         }
