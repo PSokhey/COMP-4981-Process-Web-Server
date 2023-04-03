@@ -134,7 +134,15 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
 
             // Send a response indicating the data was successfully stored
             const char *content_type = "text/plain";
-            const char *content = "Database replied successfully.";
+            //const char *content = "Database replied successfully.";
+
+            // get the content in the databse.
+            char *content = get_database_content();
+
+            if (content != NULL) {
+                printf("\ncontent sent as a response: %s\n", content);
+            }
+
             send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
 
         }

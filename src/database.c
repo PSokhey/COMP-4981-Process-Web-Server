@@ -74,3 +74,52 @@ void delete_db() {
     dbm_close(db);
 
 }
+
+// get all content in the current databse.
+char *get_database_content() {
+    // Open the database
+    DBM *db = dbm_open("database", O_RDONLY, 0666);
+    if (!db) {
+        fprintf(stderr, "Database Error: Database could not be opened.\n");
+        return NULL;
+    }
+
+    // Initialize an empty string to store the content
+    char *content = NULL;
+    size_t content_size = 0;
+
+    // Iterate through the key-value pairs in the database
+    datum key, value;
+    for (key = dbm_firstkey(db); key.dptr != NULL; key = dbm_nextkey(db)) {
+        value = dbm_fetch(db, key);
+
+        if (value.dptr != NULL) {
+            // Calculate the new content size (key size, value size, separators, and null terminator)
+            size_t new_content_size = content_size + key.dsize + value.dsize + 4;
+
+            // Reallocate memory for the new content size
+            char *new_content = realloc(content, new_content_size);
+            if (new_content == NULL) {
+                fprintf(stderr, "Memory Error: Could not allocate memory for database content.\n");
+                dbm_close(db);
+                free(content);
+                return NULL;
+            }
+
+            // Append the key-value pair to the content string
+            content = new_content;
+            sprintf(content + content_size, "%s=%s\n", key.dptr, value.dptr);
+
+            // Update the content size
+            content_size = new_content_size;
+        }
+    }
+
+// Close the database
+    dbm_close(db);
+
+// Return the content string
+    return content;
+
+}
+
