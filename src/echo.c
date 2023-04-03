@@ -141,9 +141,11 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
 
             if (content != NULL) {
                 printf("\ncontent sent as a response: %s\n", content);
-            }
+                send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
+            } else
+                send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, "Database is empty.");
 
-            send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
+
 
         }
     }
