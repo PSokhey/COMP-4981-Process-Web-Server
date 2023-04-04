@@ -238,7 +238,7 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             char* reqconcat;
             reqconcat = strdup("./web");
             reqconcat = strcat(reqconcat, http.resource);
-            fd = open(reqconcat, O_RDONLY | O_DSYNC);
+            fd = open(reqconcat, O_RDONLY | O_SYNC);
             if (fd <= 0) {
 
             } else {
@@ -246,10 +246,11 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
                 if (lseek(fd, 0, SEEK_SET) < 0) {
 
                 } else {
+                    printf("Requested file found found: %s\n", reqconcat);
                     content = malloc(file_size);
                     read(fd, content, file_size);
                     content_type = get_content_type(http.resource);
-                    send_http_head_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
+                    send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
                     free(content);
                     close(fd);
                 }
