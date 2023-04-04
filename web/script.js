@@ -25,14 +25,16 @@ function postData() {
 
 // Send a GET request to the server
 function getData() {
-  const baseUrl = window.location.href.split('/')[0]; // get the base URL
-  fetch(baseUrl + 'getDatabase') // use the base URL for the request
-      .then(response => response.text())
-      .then(data => {
-        console.log(data);
-        outputDiv.innerHTML = data;
-      })
-      .catch(error => console.error(error));
+    const baseUrl = window.location.href.split('/')[0]; // get the base URL
+    fetch(baseUrl + 'getDatabase') // use the base URL for the request
+        .then(response => response.text())
+        .then(data => {
+            console.log(data);
+            // Replace newline characters with HTML line break tag
+            const formattedData = data.replace(/\n/g, '<br>');
+            outputDiv.innerHTML = formattedData;
+        })
+        .catch(error => console.error(error));
 }
 
 // Send a DELETE request to the server

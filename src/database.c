@@ -111,10 +111,10 @@ char *get_database_content() {
 
             // Append the key-value pair to the content string
             content = new_content;
-            strncat(content, key.dptr, key.dsize);
-            strncat(content, "=", 1);
+            //strncat(content, key.dptr, key.dsize);
+            //strncat(content, "=", 1);
             strncat(content, value.dptr, value.dsize);
-            strncat(content, ";", 1); // Add a separator between key-value pairs
+            //strncat(content, ";", 1); // Add a separator between key-value pairs
             strncat(content, "\n", 1); // Add new space at the end.
         }
     }
