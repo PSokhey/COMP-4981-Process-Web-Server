@@ -85,8 +85,11 @@ char *get_database_content() {
     }
 
     // Initialize an empty string to store the content
-    char *content = NULL;
-    size_t content_size = 0;
+    char *content = calloc(1, sizeof(char));
+    if (!content) {
+        fprintf(stderr, "Memory Error: Could not allocate memory for content.\n");
+        return NULL;
+    }
 
     // Iterate through the key-value pairs in the database
     datum key, value;
@@ -95,7 +98,7 @@ char *get_database_content() {
 
         if (value.dptr != NULL) {
             // Calculate the new content size (key size, value size, separators, and null terminator)
-            size_t new_content_size = content_size + key.dsize + value.dsize + 4;
+            size_t new_content_size = strlen(content) + key.dsize + value.dsize + 4;
 
             // Reallocate memory for the new content size
             char *new_content = realloc(content, new_content_size);
@@ -108,18 +111,18 @@ char *get_database_content() {
 
             // Append the key-value pair to the content string
             content = new_content;
-            sprintf(content + content_size, "%s=%s\n", key.dptr, value.dptr);
-
-            // Update the content size
-            content_size = new_content_size;
+            strncat(content, key.dptr, key.dsize);
+            strncat(content, "=", 1);
+            strncat(content, value.dptr, value.dsize);
+            strncat(content, ";", 1); // Add a separator between key-value pairs
         }
     }
 
-// Close the database
+    // Close the database
     dbm_close(db);
 
-// Return the content string
+    // Return the content string
     return content;
-
 }
+
 
