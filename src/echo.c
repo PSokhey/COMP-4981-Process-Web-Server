@@ -5,6 +5,7 @@
 #include <dc_util/io.h>
 #include <string.h>
 #include <dc_posix/dc_string.h>
+#include <sys/stat.h>
 
 #define REQUEST_SUCCESS 200
 
@@ -109,7 +110,7 @@ char* get_content_type(char* resource) {
 // reads data sent from the client.
 static void parse_request(const struct dc_env *env, const struct dc_error *err, struct http_request *http, char* req) {
     DC_TRACE(env);
-    printf("Request received:\n%s\n", req);
+    //printf("Request received:\n%s\n", req);
 
     char* tempreq;
     tempreq = strdup(req);
@@ -176,33 +177,39 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
 
     parse_request(env, err, &http, raw_data);
 
-    printf("method:% s\n", http.method);
+    //printf("method:% s\n", http.method);
     printf("resource: %s\n", http.resource);
-    printf("version: %s\n", http.version);
+    //printf("version: %s\n", http.version);
 
-    printf("\nRout tracking:\n\n");
+    //printf("\nRout tracking:\n\n");
     // If the http request is a GET request then do the following
     if (strcmp(http.method, "GET") == 0) {
-        printf("GET request received\n");
+        //printf("GET request received\n");
         char* content;
         char* content_type;
         int fd = 0;
 
         // If the resource is / then send the index.html file
         if (strcmp(http.resource, "/") == 0) {
-            printf("index.html request received\n");
+            //printf("index.html request received\n");
             // send the index.html file
-            printf("File requested: ./html/index.html\n");
-            fd = open("./html/index.html", O_RDONLY | O_SYNC);
-            printf("fd: %d\n", fd);
+            //printf("File requested: ./web/index.html\n");
+            fd = open("./web/index.html", O_RDONLY | O_SYNC);
+            //printf("fd: %d\n", fd);
             if (fd <= 0) {
 
             } else {
-                printf("Requested file found: ./html/index.html\n");
-                read(fd, content, BLOCK_SIZE);
-                content_type = strdup("text/html");
-                //printf("Sending file: ./html/index.html\nContent type: %s\n", content_type);
-                send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
+                off_t file_size = lseek(fd, 0, SEEK_END);
+                if (lseek(fd, 0, SEEK_SET) < 0) {
+
+                } else {
+                    content = malloc(file_size);
+                    read(fd, content, file_size);
+                    content_type = strdup("text/html");
+                    send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
+                    free(content);
+                    close(fd);
+                }
             }
         }
 
@@ -214,28 +221,35 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             printf("\nFollowing is what is currently in the database:\n\n");
             print_db();
         } else {
+
             char* reqconcat;
-            reqconcat = strdup("./html");
+            reqconcat = strdup("./web");
             reqconcat = strcat(reqconcat, http.resource);
-            printf("File requested: %s\n", reqconcat);
             fd = open(reqconcat, O_RDONLY | O_SYNC);
-            printf("fd: %d\n", fd);
             if (fd <= 0) {
 
             } else {
-                printf("Requested file found found: %s\n", reqconcat);
-                read(fd, content, BLOCK_SIZE);
-                content_type = get_content_type(http.resource);
-                //printf("Sending file: %s\nContent type: %s\n", reqconcat, content_type);
-                send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
+                off_t file_size = lseek(fd, 0, SEEK_END);
+                if (lseek(fd, 0, SEEK_SET) < 0) {
+
+                } else {
+                    printf("Requested file found found: %s\n", reqconcat);
+                    content = malloc(file_size);
+                    read(fd, content, file_size);
+                    content_type = get_content_type(http.resource);
+                    send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
+                    free(content);
+                    close(fd);
+                }
             }
         }
         close(fd);
     }
 
     else if (strcmp(http.method, "HEAD") == 0) {
-        printf("HEAD request received\n");
+        //printf("HEAD request received\n");
         char* content;
+        content = malloc(BLOCK_SIZE * BLOCK_SIZE);
         char* content_type;
         int fd;
 
@@ -243,7 +257,7 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
         if (strcmp(http.resource, "/") == 0) {
             printf("index.html request received\n");
             // send the index.html file
-            fd = open("./html/index.html", O_RDONLY | O_DSYNC);
+            fd = open("./web/index.html", O_RDONLY | O_DSYNC);
             if (fd <= 0) {
 
             } else {
@@ -251,6 +265,7 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
                 read(fd, content, BLOCK_SIZE);
                 content_type = strdup("text/html");
                 send_http_head_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
+                close(fd);
             }
         }
 
@@ -263,7 +278,7 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             print_db();
         } else {
             char* reqconcat;
-            reqconcat = strdup("./html");
+            reqconcat = strdup("./web");
             reqconcat = strcat(reqconcat, http.resource);
             fd = open(reqconcat, O_RDONLY | O_DSYNC);
             if (fd <= 0) {
@@ -272,6 +287,7 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
                 read(fd, content, BLOCK_SIZE);
                 content_type = get_content_type(http.resource);
                 send_http_head_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
+                close(fd);
             }
         }
     }
