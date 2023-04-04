@@ -24,11 +24,12 @@ function postData() {
 
 // Send a GET request to the server
 function getData() {
-  fetch(window.location.href + 'getDatabase')
-  .then(response => response.text()) // receive response as text
+  const baseUrl = window.location.href.split('/')[0]; // get the base URL
+  fetch(baseUrl + 'getDatabase') // use the base URL for the request
+  .then(response => response.text())
   .then(data => {
     console.log(data);
-    outputDiv.innerHTML = data; // print received data as a string
+    outputDiv.innerHTML = data;
   })
   .catch(error => console.error(error));
 }
