@@ -242,10 +242,17 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             if (fd <= 0) {
 
             } else {
-                read(fd, content, BLOCK_SIZE);
-                content_type = get_content_type(http.resource);
-                send_http_head_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
-                close(fd);
+                off_t file_size = lseek(fd, 0, SEEK_END);
+                if (lseek(fd, 0, SEEK_SET) < 0) {
+
+                } else {
+                    content = malloc(file_size);
+                    read(fd, content, file_size);
+                    content_type = get_content_type(http.resource);
+                    send_http_head_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
+                    free(content);
+                    close(fd);
+                }
             }
         }
     }
