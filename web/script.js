@@ -2,15 +2,12 @@ const postButton = document.getElementById('post-button');
 const getButton = document.getElementById('get-button');
 const outputDiv = document.getElementById('output');
 
-// Define the URL of the server
-const url = '192.168.0.74:8080';
-
 // Send a POST request to the server
 function postData() {
   const inputBox = document.getElementById('input-box');
   const data = { message: inputBox.value };
 
-  fetch(url, {
+  fetch(window.location.href, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -27,14 +24,15 @@ function postData() {
 
 // Send a GET request to the server
 function getData() {
-  fetch(url + '/getDatabase')
-  .then(response => response.json())
+  fetch(window.location.href + 'getDatabase')
+  .then(response => response.text()) // receive response as text
   .then(data => {
     console.log(data);
-    outputDiv.innerHTML = JSON.stringify(data);
+    outputDiv.innerHTML = data; // print received data as a string
   })
   .catch(error => console.error(error));
 }
+
 
 postButton.addEventListener('click', postData);
 getButton.addEventListener('click', getData);
