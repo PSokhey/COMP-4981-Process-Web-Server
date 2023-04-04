@@ -283,12 +283,10 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
     }
 
     else if (strcmp(http.method, "POST") == 0) {
-
         // have something to insert into the database.
         // set to true while testing database behavior.
         if (true) {
             printf("POST request received and inserting to database.\n");
-
 
             // open the database
             DBM *db = dbm_open("database", O_CREAT | O_RDWR, 0666);
@@ -303,16 +301,34 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             char uuid[37];
             generate_uuid(uuid);
 
-            // test data to insert into database.
-            //char* test = "test";
-            char* test = strstr(raw_data, "\r\n\r\n") + 4;
+            // get the JSON data from the request
+            char* json_data = strstr(raw_data, "\r\n\r\n") + 4;
+
+            // extract the "message" field from the JSON object using string manipulation
+            char *start = strstr(json_data, "{\"message\":\"");
+            if (start == NULL) {
+                fprintf(stderr, "JSON Error: Failed to find message key.\n");
+                // TODO: send error message to client AND BREAK OUT OF FUNCTION.
+            }
+
+            start += strlen("{\"message\":\"");
+            char *end = strchr(start, '\"');
+            if (end == NULL) {
+                fprintf(stderr, "JSON Error: Failed to find message value.\n");
+                // TODO: send error message to client AND BREAK OUT OF FUNCTION.
+            }
+
+            int message_length = end - start;
+            char message[message_length + 1];
+            strncpy(message, start, message_length);
+            message[message_length] = '\0';
 
             // insert into database.
             datum key, value;
             key.dptr = uuid;
             key.dsize = strlen(uuid);
-            value.dptr = test;
-            value.dsize = strlen(test);
+            value.dptr = message;
+            value.dsize = strlen(message);
 
             // insert into database.
             if(dbm_store(db, key, value, DBM_INSERT) != 0) {
@@ -334,9 +350,7 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             const char *content_type = "text/plain";
             const char *content = "Data stored successfully";
             send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
-
         }
-
     }
 
     // Delete route.
