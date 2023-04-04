@@ -36,7 +36,75 @@ void send_http_response(const struct dc_env *env, struct dc_error *err, int clie
     dc_write_fully(env, err, client_socket, (uint8_t *)response_header, strlen(response_header));
     dc_write_fully(env, err, client_socket, (uint8_t *)content, content_length);
 }
+// sending a response to the client.
+void send_http_head_response(const struct dc_env *env, struct dc_error *err, int client_socket, int status_code, const char *content_type, const char *content) {
+    char response_header[256];
+    size_t content_length = strlen(content);
 
+    snprintf(response_header, sizeof(response_header),
+             "HTTP/1.0 %d OK\r\n"
+             "Content-Type: %s\r\n"
+             "Content-Length: %zu\r\n"
+             "\r\n",
+             status_code, content_type, content_length);
+
+    dc_write_fully(env, err, client_socket, (uint8_t *)response_header, strlen(response_header));
+}
+
+static bool ends_with(const char* string, const char* suffix) {
+    size_t ext_len = strlen(suffix);
+    size_t file_len = strlen(string) - ext_len;
+
+    if (file_len < 0) {
+        return false;
+    } else {
+        return !memcmp(string + file_len, suffix, ext_len);
+    }
+}
+
+char* get_content_type(char* resource) {
+    if (ends_with(resource, ".html")) {
+        return strdup("text/html");
+    } else if (ends_with(resource, ".css")) {
+        return strdup("text/css");
+    } else if (ends_with(resource, ".js")) {
+        return strdup("text/javascript");
+    } else if (ends_with(resource, ".png")) {
+        return strdup("image/png");
+    } else if (ends_with(resource, ".jpg") || ends_with(resource, ".jpeg")) {
+        return strdup("image/jpeg");
+    } else if (ends_with(resource, ".gif")) {
+        return strdup("image/gif");
+    } else if (ends_with(resource, ".bmp")) {
+        return strdup("image/bmp");
+    } else if (ends_with(resource, ".mp3")) {
+        return strdup("audio/mp3");
+    } else if (ends_with(resource, ".wav")) {
+        return strdup("audio/wav");
+    } else if (ends_with(resource, ".mp4")) {
+        return strdup("video/png");
+    } else if (ends_with(resource, ".avi")) {
+        return strdup("video/png");
+    } else if (ends_with(resource, ".pdf")) {
+        return strdup("application/pdf");
+    } else if (ends_with(resource, ".xml")) {
+        return strdup("application/xml");
+    } else if (ends_with(resource, ".json")) {
+        return strdup("application/json");
+    } else if (ends_with(resource, ".txt")) {
+        return strdup("text/plain");
+    } else if (ends_with(resource, ".ttf")) {
+        return strdup("font/ttf");
+    } else if (ends_with(resource, ".otf")) {
+        return strdup("font/otf");
+    } else if (ends_with(resource, ".zip")) {
+        return strdup("application/zip");
+    } else if (ends_with(resource, ".tar")) {
+        return strdup("application/tar");
+    } else {
+        return strdup("application/octet-string");
+    }
+}
 
 // reads data sent from the client.
 static void parse_request(const struct dc_env *env, const struct dc_error *err, struct http_request *http, char* req) {
@@ -115,13 +183,32 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
     printf("\nRout tracking:\n\n");
     // If the http request is a GET request then do the following
     if (strcmp(http.method, "GET") == 0) {
-        printf("GET request received\n");
+        char* content;
+        char* content_type;
+        int fd = 0;
 
         // If the resource is / then send the index.html file
-        if (strcmp(http.resource, "/") == 0 || strcmp(http.resource, "/index.html") == 0) {
-            printf("index.html request received\n");
+        if (strcmp(http.resource, "/") == 0) {
+            //printf("index.html request received\n");
             // send the index.html file
+            //printf("File requested: ./web/index.html\n");
+            fd = open("./web/index.html", O_RDONLY | O_SYNC);
+            //printf("fd: %d\n", fd);
+            if (fd <= 0) {
 
+            } else {
+                off_t file_size = lseek(fd, 0, SEEK_END);
+                if (lseek(fd, 0, SEEK_SET) < 0) {
+
+                } else {
+                    content = malloc(file_size);
+                    read(fd, content, file_size);
+                    content_type = strdup("text/html");
+                    send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
+                    free(content);
+                    close(fd);
+                }
+            }
         }
 
         // if request for what is in the database.
@@ -147,12 +234,44 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
 
 
 
+        } else {
+            char* reqconcat;
+            reqconcat = strdup("./web");
+            reqconcat = strcat(reqconcat, http.resource);
+            fd = open(reqconcat, O_RDONLY | O_DSYNC);
+            if (fd <= 0) {
+
+            } else {
+                read(fd, content, BLOCK_SIZE);
+                content_type = get_content_type(http.resource);
+                send_http_head_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
+                close(fd);
+            }
         }
     }
 
     else if (strcmp(http.method, "HEAD") == 0) {
-        printf("HEAD request received\n");
+        //printf("HEAD request received\n");
+        char *content;
+        content = malloc(BLOCK_SIZE * BLOCK_SIZE);
+        char *content_type;
+        int fd;
 
+        // If the resource is / then send the index.html file
+        if (strcmp(http.resource, "/") == 0) {
+            printf("index.html request received\n");
+            // send the index.html file
+            fd = open("./web/index.html", O_RDONLY | O_DSYNC);
+            if (fd <= 0) {
+
+            } else {
+
+                read(fd, content, BLOCK_SIZE);
+                content_type = strdup("text/html");
+                send_http_head_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
+                close(fd);
+            }
+        }
     }
 
     else if (strcmp(http.method, "POST") == 0) {

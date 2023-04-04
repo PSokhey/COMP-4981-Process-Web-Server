@@ -48,6 +48,7 @@ struct settings
 struct server_info
 {
     sem_t *domain_sem; // Semaphore used to synchronize access to the domain socket.
+    sem_t *file_sem;
     int domain_socket; // Domain socket used to communicate with the worker to pass client sockets.
     int pipe_fd; // Pipe used to communicate with the worker processes to send commands.
     int num_workers; // Number of worker processes.
@@ -71,6 +72,7 @@ struct worker_info
 {
     sem_t *select_sem; // Semaphore used to synchronize access to the select call.
     sem_t *domain_sem; // Semaphore used to synchronize access to the domain socket.
+    sem_t *file_sem;
     int domain_socket; // Domain socket used to communicate with the parent to pass client sockets.
     int pipe_fd; // Pipe used to communicate with the parent process to receive commands.
     struct message_handler message_handler;
@@ -93,8 +95,8 @@ static const char *check_settings(const struct dc_env *env, const struct setting
 static void usage(const struct dc_env *env, const char *program_name, const struct settings *default_settings, const char *message);
 static void sigint_handler(int signal);
 static void setup_message_handler(const struct dc_env *env, struct dc_error *err, struct message_handler *message_handler, void *library);
-static bool create_workers(struct dc_env *env, struct dc_error *err, const struct settings *settings, pid_t *workers, sem_t *select_sem, sem_t *domain_sem, const int domain_sockets[2], const int pipe_fds[2]);
-static void initialize_server(const struct dc_env *env, struct dc_error *err, struct server_info *server,  const struct settings *settings, sem_t *domain_sem, int domain_socket, int pipe_fd, pid_t *workers);
+static bool create_workers(struct dc_env *env, struct dc_error *err, const struct settings *settings, pid_t *workers, sem_t *select_sem, sem_t *domain_sem, sem_t *file_sem, const int domain_sockets[2], const int pipe_fds[2]);
+static void initialize_server(const struct dc_env *env, struct dc_error *err, struct server_info *server,  const struct settings *settings, sem_t *domain_sem, sem_t *file_sem, int domain_socket, int pipe_fd, pid_t *workers);
 static void destroy_server(const struct dc_env *env, struct dc_error *err, struct server_info *server);
 static void run_server(const struct dc_env *env, struct dc_error *err, struct server_info *server, const struct settings *settings);
 static void server_loop(const struct dc_env *env, struct dc_error *err, const struct settings *settings, struct server_info *server);
@@ -175,6 +177,7 @@ int main(int argc, char *argv[])
     {
         sem_t *select_sem;  // select semaphore for interprocess comminication.*
         sem_t *domain_sem; // domain socket semaphore for server-worker communication.*
+        sem_t *file_sem;
         int domain_sockets[2]; // domain socket for reading and writing.*
         int pipe_fds[2]; // pipe for reading and writing.*
         pid_t *workers; // array of worker processes.
@@ -182,6 +185,7 @@ int main(int argc, char *argv[])
         pid_t pid;
         char domain_sem_name[100];  // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
         char select_sem_name[100];  // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+        char file_sem_name[100];
 
         // if to print debug messages.
         if(settings.debug_server)
@@ -208,14 +212,16 @@ int main(int argc, char *argv[])
         sprintf(domain_sem_name, "/sem-%d-domain", pid);    // NOLINT(cert-err33-c)
         // creates a name for the select semaphore.
         sprintf(select_sem_name, "/sem-%d-select", pid);    // NOLINT(cert-err33-c)
+        sprintf(file_sem_name, "/sem-%d-file", pid);
         // open the select semaphore.
         select_sem = sem_open(select_sem_name, O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH, 1);
         // open the domain semaphore.
         domain_sem = sem_open(domain_sem_name, O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH, 1);
+        file_sem = sem_open(file_sem_name, O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH, 1);
         // allocates memory for the worker array.
         workers = (pid_t *)dc_malloc(env, err, settings.jobs * sizeof(pid_t));
         // create the workers with the settings, worker array, semaphores, domain sockets, and pipe.
-        is_server = create_workers(env, err, &settings, workers, select_sem, domain_sem, domain_sockets, pipe_fds);
+        is_server = create_workers(env, err, &settings, workers, select_sem, domain_sem, file_sem, domain_sockets, pipe_fds);
 
         // To be only done by the server.
         if(is_server)
@@ -237,7 +243,7 @@ int main(int argc, char *argv[])
             // Allocate memory for the server information and zero it out.
             dc_memset(env, &server, 0, sizeof(server));
             // Initialize the server with the settings, semaphores, domain sockets (write), and pipe (read).
-            initialize_server(env, err, &server, &settings, domain_sem, domain_sockets[1], pipe_fds[0], workers);
+            initialize_server(env, err, &server, &settings, domain_sem, file_sem, domain_sockets[1], pipe_fds[0], workers);
             // Run and loop server till it is time to exit.
             run_server(env, err, &server, &settings);
 
@@ -248,12 +254,14 @@ int main(int argc, char *argv[])
         // Close and unlink the semaphores.
         sem_close(domain_sem); // close the domain semaphore.
         sem_close(select_sem); // close the select semaphore.
+        sem_close(file_sem);
 
         // To be only done by the server.
         if(is_server)
         {
             sem_unlink(domain_sem_name); // removed named domain semaphore.
             sem_unlink(select_sem_name); // removed named select semaphore.
+            sem_unlink(file_sem_name);
         }
     }
 
@@ -505,7 +513,7 @@ static void setup_message_handler(const struct dc_env *env, struct dc_error *err
 }
 
 // Create the worker processes, return is only true for server and false for worker processes.
-static bool create_workers(struct dc_env *env, struct dc_error *err, const struct settings *settings, pid_t *workers, sem_t *select_sem, sem_t *domain_sem, const int domain_sockets[2], const int pipe_fds[2])
+static bool create_workers(struct dc_env *env, struct dc_error *err, const struct settings *settings, pid_t *workers, sem_t *select_sem, sem_t *domain_sem, sem_t *file_sem, const int domain_sockets[2], const int pipe_fds[2])
 {
     DC_TRACE(env);
 
@@ -551,6 +559,7 @@ static bool create_workers(struct dc_env *env, struct dc_error *err, const struc
                 // Set the semaphore and IPC for worker process.
                 worker.select_sem = select_sem; // Select semaphore.
                 worker.domain_sem = domain_sem; // Domain semaphore.
+                worker.file_sem = file_sem;
                 worker.domain_socket = domain_sockets[0]; // domain socket, can only read.
                 worker.pipe_fd = pipe_fds[1]; // pipe, can only write.
 
@@ -573,7 +582,7 @@ static bool create_workers(struct dc_env *env, struct dc_error *err, const struc
 }
 
 // Initialize the server settings for IPC and network communication.
-static void initialize_server(const struct dc_env *env, struct dc_error *err, struct server_info *server,  const struct settings *settings, sem_t *domain_sem, int domain_socket, int pipe_fd, pid_t *workers)
+static void initialize_server(const struct dc_env *env, struct dc_error *err, struct server_info *server,  const struct settings *settings, sem_t *domain_sem, sem_t *file_sem, int domain_socket, int pipe_fd, pid_t *workers)
 {
     static int optval = 1;
     struct sockaddr_in server_address;
@@ -582,6 +591,7 @@ static void initialize_server(const struct dc_env *env, struct dc_error *err, st
 
     // Server setup for IPC and listening socket.
     server->domain_sem = domain_sem;
+    server->file_sem = file_sem;
     server->domain_socket = domain_socket;
     server->pipe_fd = pipe_fd;
     server->num_workers = settings->jobs;
