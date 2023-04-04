@@ -5,13 +5,23 @@
   <link rel="stylesheet" type="text/css" href="style.css">
 </head>
 <body>
-  <div>
+<div class="container">
+  <h1>Database Manager</h1>
+  <div class="input-section">
+    <label for="input-box">Write a message to POST and save in the database:</label>
     <input type="text" id="input-box">
-    <button id="post-button">POST</button>
-    <button id="get-button">GET</button>
+    <button id="post-button">POST to database</button>
   </div>
-  <div id="output"></div>
-  <script src="script.js"></script>
+  <div class="get-section">
+    <button id="get-button">GET database</button>
+    <div id="output"></div>
+  </div>
+  <div class="delete-section">
+    <button id="delete-button" class="delete-button">DELETE current database</button>
+  </div>
+</div>
+<script src="script.js"></script>
 </body>
 </html>
+
 
