@@ -7,6 +7,9 @@
 #include <dc_posix/dc_string.h>
 
 #define REQUEST_SUCCESS 200
+#define REQUEST_NOT_FOUND 404
+#define BAD_REQUEST 400
+#define SERVER_ERROR 500
 #define REQUEST_SUCCESS_NO_CONTENT 204
 #define REQUEST_CREATED_IN_DATABASE 201
 #define INTERNAL_SERVER_ERROR 500
@@ -78,10 +81,24 @@ void send_http_response(const struct dc_env *env, struct dc_error *err, int clie
     dc_write_fully(env, err, client_socket, (uint8_t *)response_header, strlen(response_header));
     dc_write_fully(env, err, client_socket, (uint8_t *)content, content_length);
 }
-// sending a response to the client.
-void send_http_head_response(const struct dc_env *env, struct dc_error *err, int client_socket, int status_code, const char *content_type, const char *content) {
+void send_http_error(const struct dc_env *env, struct dc_error *err, int client_socket, int error_code, const char* error_msg, const char* error_body) {
     char response_header[256];
-    size_t content_length = strlen(content);
+    size_t body_length = strlen(error_body);
+
+    printf("%s\n", error_body);
+
+    snprintf(response_header, sizeof(response_header),
+             "HTTP/1.0 %d %s\r\n"
+             "Content-Type: text/html\r\n"
+             "Content-Length: %zu\r\n"
+             "\r\n", error_code, error_msg, body_length);
+
+    dc_write_fully(env, err, client_socket, (uint8_t *)response_header, strlen(response_header));
+    dc_write_fully(env, err, client_socket, (uint8_t *)error_body, body_length);
+}
+// sending a response to the client.
+void send_http_head_response(const struct dc_env *env, struct dc_error *err, int client_socket, int status_code, const char *content_type, off_t content_length) {
+    char response_header[256];
 
     snprintf(response_header, sizeof(response_header),
              "HTTP/1.0 %d OK\r\n"
@@ -237,11 +254,12 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             fd = open("./web/index.html", O_RDONLY | O_SYNC);
             //printf("fd: %d\n", fd);
             if (fd <= 0) {
-
+                //char* error = file_not_found(http.resource);
+                send_http_error(env, err, client_socket, REQUEST_NOT_FOUND, "Not Found", file_not_found(http.resource));
             } else {
                 off_t file_size = lseek(fd, 0, SEEK_END);
                 if (lseek(fd, 0, SEEK_SET) < 0) {
-
+                    send_http_error(env, err, client_socket, SERVER_ERROR, "Internal Server Error", internal_server_body());
                 } else {
                     content = malloc(file_size);
                     read(fd, content, file_size);
@@ -282,11 +300,14 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             reqconcat = strcat(reqconcat, http.resource);
             fd = open(reqconcat, O_RDONLY | O_SYNC);
             if (fd <= 0) {
-
+                printf("File not found\n");
+                char* error = file_not_found(http.resource);
+                printf("%s\n", error);
+                send_http_error(env, err, client_socket, REQUEST_NOT_FOUND, "Not Found", error);
             } else {
                 off_t file_size = lseek(fd, 0, SEEK_END);
                 if (lseek(fd, 0, SEEK_SET) < 0) {
-
+                    send_http_error(env, err, client_socket, SERVER_ERROR, "Internal Server Error", internal_server_body());
                 } else {
                     printf("Requested file found found: %s\n", reqconcat);
                     content = malloc(file_size);
@@ -309,17 +330,44 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
 
         // If the resource is / then send the index.html file
         if (strcmp(http.resource, "/") == 0) {
-            printf("index.html request received\n");
+            //printf("index.html request received\n");
             // send the index.html file
-            fd = open("./web/index.html", O_RDONLY | O_DSYNC);
+            //printf("File requested: ./web/index.html\n");
+            fd = open("./web/index.html", O_RDONLY | O_SYNC);
+            //printf("fd: %d\n", fd);
             if (fd <= 0) {
 
             } else {
+                off_t file_size = lseek(fd, 0, SEEK_END);
+                if (lseek(fd, 0, SEEK_SET) < 0) {
 
-                read(fd, content, BLOCK_SIZE);
-                content_type = strdup("text/html");
-                send_http_head_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
-                close(fd);
+                } else {
+                    content_type = strdup("text/html");
+                    send_http_head_response(env, err, client_socket, REQUEST_SUCCESS, content_type, file_size);
+                    free(content);
+                    close(fd);
+                }
+            }
+        } else {
+            char* reqconcat;
+            reqconcat = strdup("./web");
+            reqconcat = strcat(reqconcat, http.resource);
+            fd = open(reqconcat, O_RDONLY | O_SYNC);
+            if (fd <= 0) {
+
+            } else {
+                off_t file_size = lseek(fd, 0, SEEK_END);
+                if (lseek(fd, 0, SEEK_SET) < 0) {
+
+                } else {
+                    printf("Requested file found found: %s\n", reqconcat);
+/*                    content = malloc(file_size);
+                    read(fd, content, file_size);*/
+                    content_type = get_content_type(http.resource);
+                    send_http_head_response(env, err, client_socket, REQUEST_SUCCESS, content_type, file_size);
+                    free(content);
+                    close(fd);
+                }
             }
         }
     }
@@ -395,6 +443,7 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
 
     else {
         // If the http request is not a valid request then send a 400 Bad Request response
+        send_http_error(env, err, client_socket, BAD_REQUEST, "Bad Request", bad_request_body());
     }
 
     processed_length = count * sizeof(**processed_data);

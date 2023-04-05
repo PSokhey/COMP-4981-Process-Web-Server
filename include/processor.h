@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include "database.h"
+#include "error.h"
 
 
 ssize_t read_message_handler(const struct dc_env *env, struct dc_error *err, uint8_t **raw_data, int client_socket);
