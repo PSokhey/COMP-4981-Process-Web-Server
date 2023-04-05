@@ -9,6 +9,17 @@ const statusPopupClose = document.getElementById('status-popup-close');
 function showStatusPopup(statusCode, message, success = true) {
     statusPopupContent.textContent = `${statusCode}: ${message}`;
     statusPopupContent.style.backgroundColor = success ? 'green' : 'red';
+
+    if (success) {
+        statusPopupClose.textContent = 'OK';
+        statusPopupClose.classList.remove('cancel');
+        statusPopupClose.classList.add('checkmark');
+    } else {
+        statusPopupClose.textContent = 'ClOSE';
+        statusPopupClose.classList.remove('checkmark');
+        statusPopupClose.classList.add('cancel');
+    }
+
     statusPopup.style.display = 'block';
 }
 

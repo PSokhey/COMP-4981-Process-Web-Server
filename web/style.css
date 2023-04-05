@@ -102,13 +102,25 @@ button:hover {
 .status-popup-close {
   font-size: 24px;
   font-weight: bold;
-  color: green;
   cursor: pointer;
   transition: color 0.3s;
 }
 
-.status-popup-close:hover {
+.status-popup-close.checkmark {
+  color: green;
+}
+
+.status-popup-close.checkmark:hover {
   color: #006400;
 }
+
+.status-popup-close.cancel {
+  color: red;
+}
+
+.status-popup-close.cancel:hover {
+  color: #b30000;
+}
+
 
 
