@@ -59,6 +59,11 @@ int parse_json(const char *json_data, char *key_str, char *message) {
     }
 
     int message_length = msg_end - msg_start;
+
+    if(message_length > MAX_MESSAGE_SIZE || message_length <= 0) {
+        return -1;
+    }
+
     strncpy(message, msg_start, message_length);
     message[message_length] = '\0';
 
