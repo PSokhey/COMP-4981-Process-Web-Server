@@ -5,8 +5,9 @@ const outputDiv = document.getElementById('output');
 
 // Send a POST request to the server
 function postData() {
-  const inputBox = document.getElementById('input-box');
-  const data = { message: inputBox.value };
+    const keyInput = document.getElementById('key-input');
+    const inputBox = document.getElementById('input-box');
+    const data = { key: keyInput.value, message: inputBox.value };
 
   fetch(window.location.href, {
     method: 'POST',

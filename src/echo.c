@@ -7,6 +7,14 @@
 #include <dc_posix/dc_string.h>
 
 #define REQUEST_SUCCESS 200
+#define REQUEST_SUCCESS_NO_CONTENT 204
+#define REQUEST_CREATED_IN_DATABASE 201
+#define INTERNAL_SERVER_ERROR 500
+#define BAD_REQUEST 400
+
+#define MAX_MESSAGE_SIZE 4096
+
+
 
 
 static const int BLOCK_SIZE = 1024 * 4;
@@ -21,6 +29,40 @@ struct http_request {
     char* encoding;
     char* keep_connection;
 };
+
+int parse_json(const char *json_data, char *key_str, char *message) {
+    const char *key_start = strstr(json_data, "\"key\":\"");
+    const char *key_end = NULL;
+
+    if (key_start != NULL) {
+        key_start += strlen("\"key\":\"");
+        key_end = strchr(key_start, '\"');
+        if (key_end != NULL) {
+            int key_length = key_end - key_start;
+            strncpy(key_str, key_start, key_length);
+            key_str[key_length] = '\0';
+        }
+    }
+
+    const char *msg_start = strstr(json_data, "\"message\":\"");
+    if (msg_start == NULL) {
+        return -1;
+    }
+
+    msg_start += strlen("\"message\":\"");
+    const char *msg_end = strchr(msg_start, '\"');
+    if (msg_end == NULL) {
+        return -1;
+    }
+
+    int message_length = msg_end - msg_start;
+    strncpy(message, msg_start, message_length);
+    message[message_length] = '\0';
+
+    return 0;
+}
+
+
 // sending a response to the client.
 void send_http_response(const struct dc_env *env, struct dc_error *err, int client_socket, int status_code, const char *content_type, const char *content) {
     char response_header[256];
@@ -283,74 +325,59 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
     }
 
     else if (strcmp(http.method, "POST") == 0) {
-        // have something to insert into the database.
-        // set to true while testing database behavior.
-        if (true) {
-            printf("POST request received and inserting to database.\n");
+        printf("POST request received and inserting to database.\n");
 
-            // open the database
-            DBM *db = dbm_open("database", O_CREAT | O_RDWR, 0666);
+        char* json_data = strstr(raw_data, "\r\n\r\n") + 4;
 
-            if(!db) {
-                // print error for database could not be opened.
-                fprintf(stderr, "Database Error: Database could not be open.\n");
-                // TODO: send error message to client AND BREAK OUT OF FUNCTION.
-            }
+        char key_str[37] = {0};
+        char message[MAX_MESSAGE_SIZE] = {0};
 
-            // generate UUID.
-            char uuid[37];
-            generate_uuid(uuid);
-
-            // get the JSON data from the request
-            char* json_data = strstr(raw_data, "\r\n\r\n") + 4;
-
-            // extract the "message" field from the JSON object using string manipulation
-            char *start = strstr(json_data, "{\"message\":\"");
-            if (start == NULL) {
-                fprintf(stderr, "JSON Error: Failed to find message key.\n");
-                // TODO: send error message to client AND BREAK OUT OF FUNCTION.
-            }
-
-            start += strlen("{\"message\":\"");
-            char *end = strchr(start, '\"');
-            if (end == NULL) {
-                fprintf(stderr, "JSON Error: Failed to find message value.\n");
-                // TODO: send error message to client AND BREAK OUT OF FUNCTION.
-            }
-
-            int message_length = end - start;
-            char message[message_length + 1];
-            strncpy(message, start, message_length);
-            message[message_length] = '\0';
-
-            // insert into database.
-            datum key, value;
-            key.dptr = uuid;
-            key.dsize = strlen(uuid);
-            value.dptr = message;
-            value.dsize = strlen(message);
-
-            // insert into database.
-            if(dbm_store(db, key, value, DBM_INSERT) != 0) {
-                // print error for database could not be opened.
-                fprintf(stderr, "Database Error: Could not insert into database.\n");
-                //TODO: send error message to client AND BREAK OUT OF FUNCTION.
-            }
-
-            // following was inserted into the database.
-            printf("Following was inserted into the database:\n");
-            printf("key: %s\n", key.dptr);
-            printf("value: %s\n", value.dptr);
-
-            // close the database.
-            dbm_close(db);
-
-            // Send success response to client.
-            // Send a response indicating the data was successfully stored
-            const char *content_type = "text/plain";
-            const char *content = "Data stored successfully";
-            send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
+        if (parse_json(json_data, key_str, message) != 0) {
+            send_http_response(env, err, client_socket, BAD_REQUEST, "text/plain", "JSON Error: Failed to parse JSON data.");
+            free(json_data);
+            return 0;
         }
+
+        if (strlen(key_str) == 0) {
+            generate_uuid(key_str);
+        }
+
+        DBM *db = dbm_open("database", O_CREAT | O_RDWR, 0666);
+
+        if (!db) {
+            fprintf(stderr, "Database Error: Database could not be open.\n");
+            send_http_response(env, err, client_socket, INTERNAL_SERVER_ERROR, "text/plain", "Unable to insert into database.");
+            return 0;
+        }
+
+        datum key, value;
+        key.dptr = key_str;
+        key.dsize = strlen(key_str);
+        value.dptr = message;
+        value.dsize = strlen(message);
+
+        if (dbm_store(db, key, value, DBM_INSERT) != 0) {
+            fprintf(stderr, "Database Error: Could not insert into database.\n");
+            send_http_response(env, err, client_socket, INTERNAL_SERVER_ERROR, "text/plain", "Database Error: Could not insert into the database.");
+            //free(json_data);
+            dbm_close(db);
+            return 0;
+        }
+
+        printf("Following was inserted into the database:\n");
+        printf("key: %s\n", key.dptr);
+        printf("value: %s\n", value.dptr);
+
+        printf("Sending response for success insertion\n");
+        const char *content_type = "text/plain";
+        const char *content = "Data stored successfully";
+        send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
+        printf("Response sent.\n");
+
+        dbm_close(db);
+        printf("Database closed.\n");
+        //free(json_data);
+        printf("json_data freed.\n");
     }
 
     // Delete route.
