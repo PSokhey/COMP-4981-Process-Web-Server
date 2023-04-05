@@ -98,7 +98,7 @@ char *get_database_content() {
 
         if (value.dptr != NULL) {
             // Calculate the new content size (key size, value size, separators, and null terminator)
-            size_t new_content_size = strlen(content) + key.dsize + value.dsize + 4;
+            size_t new_content_size = strlen(content) + key.dsize + value.dsize + 7;
 
             // Reallocate memory for the new content size
             char *new_content = realloc(content, new_content_size);
@@ -111,11 +111,7 @@ char *get_database_content() {
 
             // Append the key-value pair to the content string
             content = new_content;
-            strncat(content, key.dptr, key.dsize);
-            strncat(content, " = ", 3);
-            strncat(content, value.dptr, value.dsize);
-            strncat(content, ";", 1); // Add a separator between key-value pairs
-            strncat(content, "\n", 1); // Add new space at the end.
+            snprintf(content + strlen(content), new_content_size - strlen(content), "%.*s = %.*s;|||", key.dsize, key.dptr, value.dsize, value.dptr);
         }
     }
 
@@ -125,5 +121,7 @@ char *get_database_content() {
     // Return the content string
     return content;
 }
+
+
 
 

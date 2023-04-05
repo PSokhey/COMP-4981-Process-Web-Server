@@ -31,12 +31,13 @@ function getData() {
         .then(response => response.text())
         .then(data => {
             console.log(data);
-            // Replace newline characters with HTML line break tag
-            const formattedData = data.replace(/\n/g, '<br><br>');
+            // Split the data string using the separator and join with HTML line break tag
+            const formattedData = data.split('||').join('<br><br>');
             outputDiv.innerHTML = formattedData;
         })
         .catch(error => console.error(error));
 }
+
 
 // Send a DELETE request to the server
 function deleteData() {

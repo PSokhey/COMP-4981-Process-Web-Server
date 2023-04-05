@@ -292,6 +292,7 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             if (content != NULL) {
                 printf("\ncontent sent as a response: %s\n", content);
                 send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
+                free(content);
             } else
                 send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, "Database is empty.");
 
@@ -380,7 +381,7 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
 
         char* json_data = strstr(raw_data, "\r\n\r\n") + 4;
 
-        char key_str[37] = {0};
+        char key_str[MAX_MESSAGE_SIZE] = {0};
         char message[MAX_MESSAGE_SIZE] = {0};
 
         if (parse_json(json_data, key_str, message) != 0) {
@@ -393,7 +394,7 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             generate_uuid(key_str);
         }
 
-        DBM *db = dbm_open("database", O_CREAT | O_RDWR, 0666);
+        DBM *db = dbm_open("database", O_CREAT | O_WRONLY, 0666);
 
         if (!db) {
             fprintf(stderr, "Database Error: Database could not be open.\n");
@@ -406,6 +407,7 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
         key.dsize = strlen(key_str);
         value.dptr = message;
         value.dsize = strlen(message);
+
 
         if (dbm_store(db, key, value, DBM_INSERT) != 0) {
             fprintf(stderr, "Database Error: Could not insert into database.\n");
