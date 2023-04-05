@@ -7,6 +7,7 @@
 #include <dc_posix/dc_string.h>
 
 #define REQUEST_SUCCESS 200
+#define REQUEST_CREATED 201
 #define REQUEST_NOT_FOUND 404
 #define BAD_REQUEST 400
 #define SERVER_ERROR 500
@@ -424,7 +425,7 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
         printf("Sending response for success insertion\n");
         const char *content_type = "text/plain";
         const char *content = "Data stored successfully";
-        send_http_response(env, err, client_socket, REQUEST_SUCCESS, content_type, content);
+        send_http_response(env, err, client_socket, REQUEST_CREATED, content_type, content);
         printf("Response sent.\n");
 
         dbm_close(db);
