@@ -32,7 +32,7 @@ function getData() {
         .then(data => {
             console.log(data);
             // Replace newline characters with HTML line break tag
-            const formattedData = data.replace(/\n/g, '<br>');
+            const formattedData = data.replace(/\n/g, '<br><br>');
             outputDiv.innerHTML = formattedData;
         })
         .catch(error => console.error(error));
