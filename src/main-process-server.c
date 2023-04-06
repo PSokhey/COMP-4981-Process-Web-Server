@@ -1091,7 +1091,6 @@ static void process_message(const struct dc_env *env, struct dc_error *err, stru
         print_fd(env, "Started working on", fd, settings->verbose_handler);
         raw_data = NULL;
         // use reader from the passed in library to read the data from the client socket.
-        printf("\nreading message\n\n");
         raw_data_length = worker->message_handler.reader(env, err, &raw_data, client_socket);
         closed = true; // (D'Arcy Note) set it to true so if the client forgets to set it the connection is closed which is probably bad for some things - making it noticed, also if there is an issue reading/writing probably should close.
 
@@ -1120,7 +1119,6 @@ static void process_message(const struct dc_env *env, struct dc_error *err, stru
                 if(dc_error_has_no_error(err))
                 {
                     // use sender from the passed in library to send the data to the client.
-                    printf("\nsending message\n\n");
                     worker->message_handler.sender(env, err, processed_data, processed_data_length, client_socket, &closed);
                 }
 
