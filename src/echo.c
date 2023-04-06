@@ -66,7 +66,7 @@ int parse_json(const char *json_data, char *key_str, char *message) {
     }
 
     // check if the message or key contains |||.
-    if(strstr(key_str, "||") != NULL || strstr(msg_start, "||") != NULL) {
+    if(strstr(key_str, "|") != NULL || strstr(msg_start, "|") != NULL) {
         return -1;
     }
 
@@ -395,6 +395,7 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
         // extract the key and message from the json data.
         if (parse_json(json_data, key_str, message) != 0 ) {
             send_http_response(env, err, client_socket, BAD_REQUEST, "text/plain", "JSON Error: Failed to parse JSON data.");
+            fprintf(stderr, "BAD REQUEST: not valid key/value.\n");
             free(json_data);
             return 0;
         }
