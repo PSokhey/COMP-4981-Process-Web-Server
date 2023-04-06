@@ -147,14 +147,16 @@ char* get_content_type(char* resource) {
         return strdup("image/gif");
     } else if (ends_with(resource, ".bmp")) {
         return strdup("image/bmp");
+    } else if (ends_with(resource, ".ico")) {
+        return strdup("image/x-icon");
     } else if (ends_with(resource, ".mp3")) {
         return strdup("audio/mp3");
     } else if (ends_with(resource, ".wav")) {
         return strdup("audio/wav");
     } else if (ends_with(resource, ".mp4")) {
-        return strdup("video/png");
+        return strdup("video/mp4");
     } else if (ends_with(resource, ".avi")) {
-        return strdup("video/png");
+        return strdup("video/avi");
     } else if (ends_with(resource, ".pdf")) {
         return strdup("application/pdf");
     } else if (ends_with(resource, ".xml")) {
