@@ -51,7 +51,7 @@ void print_db() {
 void delete_db() {
 
     DBM* db;
-    db = dbm_open("database", O_RDWR, 0666);
+    db = dbm_open("database", O_CREAT | O_RDWR, 0666);
     if (!db) {
         fprintf(stderr, "Error: Failed to open database.\n");
         exit(1);
