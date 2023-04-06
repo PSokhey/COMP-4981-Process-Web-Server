@@ -116,6 +116,7 @@ static void print_socket(const struct dc_env *env, struct dc_error *err, const c
 // Default settings.
 static const int DEFAULT_N_PROCESSES = 2; // Default number of worker processes.
 static const int DEFAULT_PORT = 8080; // Default port to listen on.
+static const int DEFAULT_ROOT_PORT = 80; // Default port to listen on if user is root user.
 static const int DEFAULT_BACKLOG = SOMAXCONN; // Default backlog for the listening socket.
 static const char * const READ_MESSAGE_FUNC = "read_message_handler"; // Default function used to read a message from a socket.
 static const char * const PROCESS_MESSAGE_FUNC = "process_message_handler"; // Default function used to process a message.
@@ -282,7 +283,11 @@ static void setup_default_settings(const struct dc_env *env, struct dc_error *er
     default_settings->library_path     = NULL;
     default_settings->interface        = dc_get_default_interface(env, err, AF_INET);
     default_settings->address          = dc_get_ip_addresses_by_interface(env, err, default_settings->interface, AF_INET);
-    default_settings->port             = DEFAULT_PORT;
+    if (geteuid() == 0) {
+        default_settings->port         = DEFAULT_ROOT_PORT;
+    } else {
+        default_settings->port         = DEFAULT_PORT;
+    }
     default_settings->backlog          = DEFAULT_BACKLOG;
     default_settings->jobs             = dc_get_number_of_processors(env, err, DEFAULT_N_PROCESSES);
     default_settings->verbose_server   = false;
