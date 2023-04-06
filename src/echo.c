@@ -35,6 +35,7 @@ int parse_json(const char *json_data, char *key_str, char *message) {
     const char *key_start = strstr(json_data, "\"key\":\"");
     const char *key_end = NULL;
 
+    // check if request contains a key.
     if (key_start != NULL) {
         key_start += strlen("\"key\":\"");
         key_end = strchr(key_start, '\"');
@@ -45,6 +46,7 @@ int parse_json(const char *json_data, char *key_str, char *message) {
         }
     }
 
+    // check if request contains a message.
     const char *msg_start = strstr(json_data, "\"message\":\"");
     if (msg_start == NULL) {
         return -1;
@@ -58,10 +60,17 @@ int parse_json(const char *json_data, char *key_str, char *message) {
 
     int message_length = msg_end - msg_start;
 
+    // check if the message is the correcdt size.
     if(message_length > MAX_MESSAGE_SIZE || message_length <= 0) {
         return -1;
     }
 
+    // check if the message or key contains |||.
+    if(strstr(key_str, "||") != NULL || strstr(msg_start, "||") != NULL) {
+        return -1;
+    }
+
+    // copy the message into the message buffer.
     strncpy(message, msg_start, message_length);
     message[message_length] = '\0';
 
@@ -198,7 +207,6 @@ static void parse_request(const struct dc_env *env, const struct dc_error *err, 
 }
 
 // reads data sent from the client.
-// TODO: READ THE MESSAGE FROM THE CLIENT.
 ssize_t read_message_handler(const struct dc_env *env, struct dc_error *err, uint8_t **raw_data, int client_socket)
 {
     ssize_t bytes_read;
@@ -228,7 +236,7 @@ ssize_t read_message_handler(const struct dc_env *env, struct dc_error *err, uin
 // processes the data sent from the client.
 
 
-// TODO: PROCESS HTTP REQUEST HERE.
+// HTTP request is handled here.
 size_t process_message_handler(const struct dc_env *env, struct dc_error *err, const uint8_t *raw_data, uint8_t **processed_data, ssize_t count, int client_socket)
 {
     struct http_request http;
@@ -384,24 +392,29 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
         char key_str[MAX_MESSAGE_SIZE] = {0};
         char message[MAX_MESSAGE_SIZE] = {0};
 
-        if (parse_json(json_data, key_str, message) != 0) {
+        // extract the key and message from the json data.
+        if (parse_json(json_data, key_str, message) != 0 ) {
             send_http_response(env, err, client_socket, BAD_REQUEST, "text/plain", "JSON Error: Failed to parse JSON data.");
             free(json_data);
             return 0;
         }
 
+        // if the key is empty, generate a uuid
         if (strlen(key_str) == 0) {
             generate_uuid(key_str);
         }
 
+        // open the database
         DBM *db = dbm_open("database", O_CREAT | O_WRONLY, 0666);
 
+        // check if the database was opened successfully, if not sen internal error response.
         if (!db) {
             fprintf(stderr, "Database Error: Database could not be open.\n");
             send_http_response(env, err, client_socket, INTERNAL_SERVER_ERROR, "text/plain", "Unable to insert into database.");
             return 0;
         }
 
+        // insert the key and value into the database
         datum key, value;
         key.dptr = key_str;
         key.dsize = strlen(key_str);
