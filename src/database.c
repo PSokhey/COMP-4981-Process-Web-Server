@@ -28,7 +28,7 @@ void print_db() {
 
     datum k, v;
 
-    printf("\nFollowing messages are stored in the database:\n");
+    printf("\nFollowing messages are stored in the database:\n\n");
 
     // iterate over all entries in the database
     for (k = dbm_firstkey(db); k.dptr; k = dbm_nextkey(db)) {

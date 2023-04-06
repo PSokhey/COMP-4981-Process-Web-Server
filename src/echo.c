@@ -286,7 +286,6 @@ size_t process_message_handler(const struct dc_env *env, struct dc_error *err, c
             // send the database file
             printf("database log request received\n");
             // test what is currently in the database.
-            printf("\nFollowing is what is currently in the database:\n\n");
             print_db();
 
             // Send a response indicating the data was successfully stored
